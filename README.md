@@ -76,6 +76,3 @@ Download pretrained weights to the `weights/` directory:
 | SpaceNet v2 | Building detection | [spacenet.ai](https://spacenet.ai/) |
 | ADE20K | Agriculture segmentation | HuggingFace (auto) |
 
----
-
-**Team**: Data & AI Team — Khaled Ramadan Ali
