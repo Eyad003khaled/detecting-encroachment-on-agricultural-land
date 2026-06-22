@@ -366,126 +366,106 @@ class FoodSecurityPipeline:
         self,
         new_image_path: str | Path,
         new_date:       str,
-        first_t1_path:  Optional[str | Path] = None,
-        first_t1_date:  Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Add a new image to the temporal record and run the appropriate
-        comparison(s) automatically.
+        Register a new image and run the same-season year-over-year comparison.
+
+        Strategy
+        --------
+        1. PRIMARY  — find the closest image from ~1 year ago (±45 days).
+                      Eliminates seasonal noise; only structural changes survive.
+        2. RECENCY CHECK — run only if primary detects change.
+                      Compares against the most recent prior image to answer
+                      "was this already there last month, or brand new?"
+
+        Regions are tagged:
+          new_encroachment      — visible in both primary and recency
+          existing_encroachment — in primary but not recency (pre-existing)
+          unconfirmed_timing    — primary flagged it but no recency image available
 
         Parameters
         ----------
-        new_image_path : path to the new satellite image (T2 for this run)
-        new_date       : human-readable date label, e.g. "2025" or "2025-03"
-        first_t1_path  : only required on the very first call — the baseline
-                         T1 image to compare against
-        first_t1_date  : date label for the baseline T1 image
-
-        Returns
-        -------
-        Dict with keys:
-          "mode"     : "rolling" | "dual" | "first_run"
-          "results"  : list of per-comparison pipeline results
-          "regions"  : merged region list (tagged new vs existing)
-          "state"    : updated temporal state
+        new_image_path : path to the new satellite image
+        new_date       : date label, e.g. "2025-03-15" or "2025-03" or "2025"
         """
         from src.temporal.temporal_manager import (
-            load_state, save_state, get_comparison_plan,
-            record_run, merge_dual_results,
+            load_state, save_state, register_image,
+            get_comparison_plan, record_run, merge_results,
         )
 
         new_image_path = str(Path(new_image_path).resolve())
         state = load_state()
-        plan  = get_comparison_plan(new_image_path, new_date, state)
 
-        # ── First-ever run needs a T1 image provided by the caller ──────────
-        if plan["is_first_run"]:
-            if first_t1_path is None or first_t1_date is None:
-                raise ValueError(
-                    "This is the first run. Provide first_t1_path and "
-                    "first_t1_date to establish the baseline."
-                )
-            logger.info(
-                f"First run: comparing {first_t1_date} → {new_date}"
-            )
-            plan["comparisons"] = [{
-                "t1_path":  str(Path(first_t1_path).resolve()),
-                "t2_path":  new_image_path,
-                "t1_date":  first_t1_date,
-                "t2_date":  new_date,
-                "label":    "incremental",
-            }]
+        # Register this image in the archive
+        state = register_image(state, new_image_path, new_date)
+        save_state(state)
 
-        # ── Run each comparison ──────────────────────────────────────────────
-        comparison_results = []
-        for comp in plan["comparisons"]:
+        plan = get_comparison_plan(new_image_path, new_date, state)
+        logger.info(f"\nComparison plan: {plan['mode']}\n  {plan['explanation']}")
+
+        if plan["primary"] is None:
+            logger.warning("Cannot run pipeline — not enough images in archive yet.")
+            return {"mode": plan["mode"], "results": [], "regions": [], "state": state}
+
+        # ── Run primary comparison ───────────────────────────────────────────
+        primary = plan["primary"]
+        logger.info(f"\n{'─'*60}\n  PRIMARY [{primary['t1_date']} → {primary['t2_date']}]\n{'─'*60}")
+        self.results = {}
+        primary_pipeline = self.run_full(t1_path=primary["t1_path"], t2_path=primary["t2_path"])
+        primary_regions  = primary_pipeline.get("step_08", {}).get("regions", [])
+
+        # ── Recency check — only if primary found something ──────────────────
+        recency_regions  = None
+        recency_pipeline = None
+
+        if primary_regions and plan["recency"] is not None:
+            recency = plan["recency"]
             logger.info(
                 f"\n{'─'*60}\n"
-                f"  Comparison [{comp['label'].upper()}]: "
-                f"{comp['t1_date']} → {comp['t2_date']}\n"
+                f"  RECENCY CHECK [{recency['t1_date']} → {recency['t2_date']}]\n"
                 f"{'─'*60}"
             )
-            self.results = {}   # fresh result cache per comparison
-            result = self.run_full(
-                t1_path=comp["t1_path"],
-                t2_path=comp["t2_path"],
+            self.results = {}
+            recency_pipeline = self.run_full(
+                t1_path=recency["t1_path"], t2_path=recency["t2_path"]
             )
-            comparison_results.append({
-                "label":   comp["label"],
-                "t1_date": comp["t1_date"],
-                "t2_date": comp["t2_date"],
-                "result":  result,
-            })
+            recency_regions = recency_pipeline.get("step_08", {}).get("regions", [])
+        elif primary_regions and plan["recency"] is None:
+            logger.info("Primary flagged changes but no recency image available — skipping recency check.")
 
-        # ── Merge dual results ───────────────────────────────────────────────
-        if plan["mode"] == "dual" and len(comparison_results) == 2:
-            cumulative_regions  = (
-                comparison_results[0]["result"]
-                .get("step_08", {}).get("regions", [])
-            )
-            incremental_regions = (
-                comparison_results[1]["result"]
-                .get("step_08", {}).get("regions", [])
-            )
-            merged_regions = merge_dual_results(cumulative_regions, incremental_regions)
-        else:
-            merged_regions = (
-                comparison_results[0]["result"]
-                .get("step_08", {}).get("regions", [])
-                if comparison_results else []
-            )
-            for r in merged_regions:
-                r["encroachment_type"] = "new_encroachment"
+        # ── Merge and tag ────────────────────────────────────────────────────
+        merged_regions  = merge_results(primary_regions, recency_regions)
+        change_detected = len(merged_regions) > 0
+        encroachment_ha = sum(r.get("area_ha", 0) for r in merged_regions)
 
-        # ── Determine if change was detected ────────────────────────────────
-        change_detected  = len(merged_regions) > 0
-        encroachment_ha  = sum(r.get("area_ha", 0) for r in merged_regions)
-
-        # ── Update and persist state ─────────────────────────────────────────
-        first_comp = plan["comparisons"][0]
         state = record_run(
-            state           = state,
-            t1_path         = first_comp["t1_path"],
-            t2_path         = new_image_path,
-            t1_date         = first_comp["t1_date"],
-            t2_date         = new_date,
-            change_detected = change_detected,
-            encroachment_ha = encroachment_ha,
-            regions         = merged_regions,
+            state            = state,
+            new_image_path   = new_image_path,
+            new_date_str     = new_date,
+            primary_result   = primary_pipeline,
+            recency_result   = recency_pipeline,
+            change_detected  = change_detected,
+            encroachment_ha  = encroachment_ha,
+            regions          = merged_regions,
         )
         save_state(state)
 
+        n_new   = sum(1 for r in merged_regions if r.get("encroachment_type") == "new_encroachment")
+        n_exist = sum(1 for r in merged_regions if r.get("encroachment_type") == "existing_encroachment")
+        n_unc   = sum(1 for r in merged_regions if r.get("encroachment_type") == "unconfirmed_timing")
+
         logger.info(
             f"\nTemporal run complete — mode: {plan['mode']}\n"
-            f"  Change detected: {change_detected}\n"
             f"  Total encroachment: {encroachment_ha:.2f} ha\n"
-            f"  New:      {sum(1 for r in merged_regions if r.get('encroachment_type') == 'new_encroachment')}\n"
-            f"  Existing: {sum(1 for r in merged_regions if r.get('encroachment_type') == 'existing_encroachment')}\n"
+            f"  New:               {n_new}\n"
+            f"  Existing:          {n_exist}\n"
+            f"  Unconfirmed timing:{n_unc}\n"
         )
 
         return {
-            "mode":    plan["mode"],
-            "results": comparison_results,
-            "regions": merged_regions,
-            "state":   state,
+            "mode":            plan["mode"],
+            "primary_result":  primary_pipeline,
+            "recency_result":  recency_pipeline,
+            "regions":         merged_regions,
+            "state":           state,
         }

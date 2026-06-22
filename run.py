@@ -2,23 +2,33 @@
 Food Security ML Pipeline — CLI Entry Point
 
 Single-run modes:
-    python run.py --t1 data/raw/T1/image.tif --t2 data/raw/T2/image.tif
-    python run.py --gee                  # Download from GEE
-    python run.py --test                 # Run with synthetic data
-    python run.py --start-from 5 ...    # Resume from a specific step
+    python run.py --t1 before.tif --t2 after.tif
+    python run.py --gee
+    python run.py --test
 
-Multi-temporal mode (recommended for ongoing monitoring):
-    # First call — provide both the baseline AND the new image
-    python run.py --temporal --new-image 2024.tif --new-date 2024 ^
-                  --first-t1 2023.tif --first-date 2023
+Temporal mode (production — satellite revisits every ~20 days):
+    # Step 1: Register all historical images you already have (no pipeline runs)
+    python run.py --register --image 2021-03.tif --date 2021-03-10
+    python run.py --register --image 2022-03.tif --date 2022-03-08
+    python run.py --register --image 2023-03.tif --date 2023-03-05
+    ...
 
-    # Every subsequent call — just add the new image; history is automatic
-    python run.py --temporal --new-image 2025.tif --new-date 2025
+    # Step 2: Each time a new image arrives, run one command
+    python run.py --temporal --new-image 2026-03.tif --new-date 2026-03-15
 
-    # Check what the pipeline will do without running it
-    python run.py --temporal --new-image 2025.tif --new-date 2025 --dry-run
+    The pipeline automatically:
+      - Finds the closest image from ~1 year ago (same season, no seasonal noise)
+      - Runs primary comparison against it
+      - If change is detected, runs a recency check against the most recent image
+        to determine if the encroachment is brand-new or pre-existing
 
-    # Wipe history and start fresh
+    # Preview what would run without executing
+    python run.py --temporal --new-image 2026-03.tif --new-date 2026-03-15 --dry-run
+
+    # See the full archive and run history
+    python run.py --status
+
+    # Wipe everything and start over
     python run.py --temporal-reset
 """
 
@@ -33,61 +43,43 @@ if str(PROJECT_ROOT) not in sys.path:
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Food Security ML Pipeline — Detect Buildings on Agricultural Land",
+        description="Food Security ML Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Standard single run
-  python run.py --t1 data/raw/T1/image.tif --t2 data/raw/T2/image.tif
-
-  # Multi-temporal: first run (establishes baseline)
-  python run.py --temporal --new-image images/2024.tif --new-date 2024 ^
-                --first-t1 images/2023.tif --first-date 2023
-
-  # Multi-temporal: add 2025 image (pipeline decides comparisons automatically)
-  python run.py --temporal --new-image images/2025.tif --new-date 2025
-
-  # Download from Google Earth Engine
-  python run.py --gee
-
-  # Run with synthetic test data (no model weights needed)
-  python run.py --test
-        """,
     )
 
-    mode_group = parser.add_mutually_exclusive_group(required=True)
-    mode_group.add_argument("--t1",             type=str, help="Path to T1 (before) GeoTIFF")
-    mode_group.add_argument("--gee",            action="store_true", help="Download from GEE")
-    mode_group.add_argument("--test",           action="store_true", help="Synthetic test data")
-    mode_group.add_argument("--temporal",       action="store_true", help="Multi-temporal mode")
-    mode_group.add_argument("--temporal-reset", action="store_true", help="Clear temporal history")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--t1",             type=str,           help="T1 (before) GeoTIFF path")
+    mode.add_argument("--gee",            action="store_true", help="Download from Google Earth Engine")
+    mode.add_argument("--test",           action="store_true", help="Run with synthetic test data")
+    mode.add_argument("--temporal",       action="store_true", help="Temporal mode: add new image and run")
+    mode.add_argument("--register",       action="store_true", help="Register an image in the archive (no pipeline run)")
+    mode.add_argument("--status",         action="store_true", help="Show archive and run history")
+    mode.add_argument("--temporal-reset", action="store_true", help="Clear all temporal history")
 
-    # Single-run args
-    parser.add_argument("--t2",         type=str, help="Path to T2 GeoTIFF (with --t1)")
-    parser.add_argument("--start-from", type=int, default=1, choices=range(1, 9),
-                        help="Resume from step N (1-8)")
-    parser.add_argument("--output-dir", type=str, default=None, help="Override output directory")
+    # Single-run
+    parser.add_argument("--t2",         type=str, help="T2 (after) GeoTIFF path (with --t1)")
+    parser.add_argument("--start-from", type=int, default=1, choices=range(1, 9))
 
-    # Temporal args
-    parser.add_argument("--new-image",  type=str, help="New image to add (--temporal)")
-    parser.add_argument("--new-date",   type=str, help="Date label for new image, e.g. '2025'")
-    parser.add_argument("--first-t1",   type=str, help="Baseline T1 image (first temporal run only)")
-    parser.add_argument("--first-date", type=str, help="Date label for baseline T1")
-    parser.add_argument("--dry-run",    action="store_true",
-                        help="Show what comparisons would run without executing them")
+    # Temporal / register
+    parser.add_argument("--new-image",  type=str, help="New image path (--temporal)")
+    parser.add_argument("--new-date",   type=str, help="Date of new image, e.g. 2026-03-15")
+    parser.add_argument("--image",      type=str, help="Image path (--register)")
+    parser.add_argument("--date",       type=str, help="Image date (--register)")
+    parser.add_argument("--dry-run",    action="store_true", help="Show plan without running")
 
     args = parser.parse_args()
 
     if args.t1 and not args.t2:
-        parser.error("--t2 is required when using --t1")
-    if args.temporal:
-        if not args.new_image:
-            parser.error("--new-image is required with --temporal")
-        if not args.new_date:
-            parser.error("--new-date is required with --temporal")
+        parser.error("--t2 required with --t1")
+    if args.temporal and (not args.new_image or not args.new_date):
+        parser.error("--new-image and --new-date required with --temporal")
+    if args.register and (not args.image or not args.date):
+        parser.error("--image and --date required with --register")
 
     return args
 
+
+# ── Mode handlers ─────────────────────────────────────────────────────────────
 
 def run_test_mode():
     from src.utils.geo_utils import create_synthetic_geotiff
@@ -96,88 +88,117 @@ def run_test_mode():
     print("\n" + "=" * 60)
     print("  RUNNING IN TEST MODE (synthetic data)")
     print("=" * 60 + "\n")
-
-    t1_path = create_synthetic_geotiff(RAW_DIR / "T1" / "T1_synthetic.tif")
-    t2_path = create_synthetic_geotiff(RAW_DIR / "T2" / "T2_synthetic.tif")
-    print(f"Created synthetic T1: {t1_path}")
-    print(f"Created synthetic T2: {t2_path}")
+    t1 = create_synthetic_geotiff(RAW_DIR / "T1" / "T1_synthetic.tif")
+    t2 = create_synthetic_geotiff(RAW_DIR / "T2" / "T2_synthetic.tif")
+    print(f"Created synthetic T1: {t1}")
+    print(f"Created synthetic T2: {t2}")
 
     from pipeline import FoodSecurityPipeline
-    pipe    = FoodSecurityPipeline()
-    results = pipe.run_full(t1_path=t1_path, t2_path=t2_path)
+    pipe = FoodSecurityPipeline()
+    pipe.run_full(t1_path=t1, t2_path=t2)
     print("\n✅ Test mode completed successfully!")
-    return results
+
+
+def run_register(args):
+    from src.temporal.temporal_manager import load_state, save_state, register_image
+    state = load_state()
+    state = register_image(state, args.image, args.date)
+    save_state(state)
+    print(f"✅ Registered: {args.date} → {args.image}")
+    print(f"   Archive now has {len(state['archive'])} image(s).")
+
+
+def run_status():
+    from src.temporal.temporal_manager import load_state
+    state = load_state()
+    archive = state.get("archive", [])
+    runs    = state.get("runs", [])
+
+    print("\n" + "=" * 60)
+    print("  TEMPORAL ARCHIVE")
+    print("=" * 60)
+    if not archive:
+        print("  (empty — use --register to add images)")
+    for e in archive:
+        print(f"  {e['label']:<20} {e['path']}")
+
+    print("\n" + "=" * 60)
+    print("  RUN HISTORY")
+    print("=" * 60)
+    if not runs:
+        print("  (no runs yet)")
+    for r in runs:
+        chg = "⚠ CHANGE" if r.get("change_detected") else "✓ no change"
+        print(
+            f"  {r['new_date']:<20} {chg:<16} "
+            f"{r.get('encroachment_ha', 0):.2f} ha  "
+            f"{r.get('region_count', 0)} regions"
+        )
+    print()
 
 
 def run_temporal_mode(args):
-    from src.temporal.temporal_manager import load_state, get_comparison_plan
+    from src.temporal.temporal_manager import load_state, get_comparison_plan, register_image, save_state
 
     state = load_state()
+    # Register the new image first so plan can see it
+    state = register_image(state, args.new_image, args.new_date)
     plan  = get_comparison_plan(args.new_image, args.new_date, state)
 
     print("\n" + "=" * 60)
-    print("  TEMPORAL MODE")
+    print(f"  TEMPORAL MODE — {args.new_date}")
     print("=" * 60)
-
-    if plan["is_first_run"]:
-        if not args.first_t1 or not args.first_date:
-            print(
-                "\n  ⚠  This is the first run — no history yet.\n"
-                "  Provide --first-t1 and --first-date to set the baseline.\n"
-                "\n  Example:\n"
-                "    python run.py --temporal --new-image 2024.tif --new-date 2024 \\\n"
-                "                  --first-t1 2023.tif --first-date 2023\n"
-            )
-            sys.exit(1)
-        print(f"  First run — baseline: {args.first_date}")
-        print(f"  Comparison: {args.first_date} → {args.new_date}")
-    elif plan["mode"] == "rolling":
-        comp = plan["comparisons"][0]
-        print(f"  Mode: ROLLING WINDOW (no prior change detected)")
-        print(f"  Comparing: {comp['t1_date']} → {comp['t2_date']}")
-    elif plan["mode"] == "dual":
-        print(f"  Mode: DUAL (prior change detected)")
-        for c in plan["comparisons"]:
-            tag = "cumulative (total)" if c["label"] == "cumulative" else "incremental (new only)"
-            print(f"    [{tag}] {c['t1_date']} → {c['t2_date']}")
-
+    print(f"  Strategy:  {plan['mode']}")
+    print(f"  {plan['explanation'].replace(chr(10), chr(10) + '  ')}")
     print("=" * 60 + "\n")
 
     if args.dry_run:
         print("  [DRY RUN] No pipeline executed.\n")
+        # Still save the registration
+        save_state(state)
+        return
+
+    if plan["primary"] is None:
+        print(
+            "  ⚠  Not enough images in archive to run a comparison.\n"
+            "  Register at least one earlier image first:\n"
+            "    python run.py --register --image <path> --date <YYYY-MM-DD>\n"
+        )
+        save_state(state)
         return
 
     from pipeline import FoodSecurityPipeline
-    pipe = FoodSecurityPipeline()
+    pipe   = FoodSecurityPipeline()
     output = pipe.run_temporal(
         new_image_path = args.new_image,
         new_date       = args.new_date,
-        first_t1_path  = args.first_t1,
-        first_t1_date  = args.first_date,
     )
 
-    regions  = output["regions"]
+    regions  = output.get("regions", [])
     n_new    = sum(1 for r in regions if r.get("encroachment_type") == "new_encroachment")
     n_exist  = sum(1 for r in regions if r.get("encroachment_type") == "existing_encroachment")
+    n_unc    = sum(1 for r in regions if r.get("encroachment_type") == "unconfirmed_timing")
     total_ha = sum(r.get("area_ha", 0) for r in regions)
 
     print("\n" + "=" * 60)
-    print("  TEMPORAL RESULTS")
+    print("  RESULTS")
     print("=" * 60)
-    print(f"  Mode:               {output['mode']}")
-    print(f"  New encroachment:   {n_new} regions")
-    print(f"  Existing (prior):   {n_exist} regions")
-    print(f"  Total area lost:    {total_ha:.2f} ha")
-    print("=" * 60 + "\n")
+    print(f"  New encroachment:       {n_new} regions")
+    print(f"  Pre-existing:           {n_exist} regions")
+    print(f"  Unconfirmed timing:     {n_unc} regions")
+    print(f"  Total area:             {total_ha:.2f} ha")
+    print("=" * 60)
 
-    if output["results"]:
-        last_paths = output["results"][-1]["result"].get("step_08", {}).get("paths", {})
-        if last_paths:
-            print("  Output files:")
-            for k, v in last_paths.items():
-                print(f"    {k}: {v}")
+    last = output.get("primary_result") or {}
+    paths = last.get("step_08", {}).get("paths", {})
+    if paths:
+        print("\n  Output files:")
+        for k, v in paths.items():
+            print(f"    {k}: {v}")
     print()
 
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     args = parse_args()
@@ -188,6 +209,14 @@ def main():
         print("✅ Temporal history cleared.")
         return
 
+    if args.status:
+        run_status()
+        return
+
+    if args.register:
+        run_register(args)
+        return
+
     if args.test:
         run_test_mode()
         return
@@ -196,6 +225,7 @@ def main():
         run_temporal_mode(args)
         return
 
+    # ── Standard single run ───────────────────────────────────────────────────
     from pipeline import FoodSecurityPipeline
     pipe = FoodSecurityPipeline()
 
@@ -207,18 +237,17 @@ def main():
         )
 
     if "step_08" in results:
-        report   = results["step_08"].get("report", {})
+        report = results["step_08"].get("report", {})
         print("\n" + "=" * 60)
-        print("  FINAL RESULTS SUMMARY")
+        print("  RESULTS")
         print("=" * 60)
-        print(f"  Regions detected:    {report.get('total_regions', 'N/A')}")
-        print(f"  Encroachment area:   {report.get('encroachment_ha', 'N/A')} ha")
-        print(f"  Yellow alert area:   {report.get('yellow_alert_ha', 'N/A')} ha")
-        print("=" * 60)
+        print(f"  Regions:           {report.get('total_regions', 'N/A')}")
+        print(f"  Encroachment area: {report.get('encroachment_ha', 'N/A')} ha")
+        print(f"  Yellow alert area: {report.get('yellow_alert_ha', 'N/A')} ha")
         paths = results["step_08"].get("paths", {})
-        print("\n  Output Files:")
-        for fmt, path in paths.items():
-            print(f"    {fmt}: {path}")
+        print("\n  Output files:")
+        for k, v in paths.items():
+            print(f"    {k}: {v}")
         print()
 
 
