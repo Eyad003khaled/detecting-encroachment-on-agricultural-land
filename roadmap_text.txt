@@ -1,0 +1,1131 @@
+--- Page 1 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+ 
+PROJECT ROADMAP 
+End to End System for Food Security 
+Detect Buildings on Agriculture Areas 
+Project Name 
+End to End System for Food Security to Detect Buildings on Agriculture 
+Areas 
+Team Name 
+___________________________________ 
+Sub-Team Name 
+Data & AI Team 
+Prepared By 
+Khaled Ramadan Ali 
+Date 
+February 2026 
+Duration 
+3 Months (12 Weeks) — March to May 2026 
+Version 
+v2.0 
+ 
+Satellite Remote Sensing  ·  Deep Learning  ·  Agricultural Monitoring 
+ 
+March 2026 — May 2026 
+ 
+ 
+
+--- Page 2 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+1.  Project Overview 
+This document is the complete technical reference for the food security project. It covers the full 8-step 
+pipeline from raw satellite image acquisition through to the final colored map showing where buildings have 
+been constructed on agricultural land. For each step the document provides: a model introduction, how to use 
+it as a pretrained model, code examples, and links to tutorials and courses. 
+Duration 
+3 Months · 12 Weeks (March – May 2026) 
+Team 
+Data & AI Team 
+Prepared By 
+Khaled Ramadan Ali 
+Steps 
+8 pipeline steps — Data to Final Output 
+Key Models 
+U-Net · ChangeFormer · SegFormer-B4 · SAM · YOLOv8-seg 
+Framework 
+PyTorch + HuggingFace Transformers 
+Final Output 
+Colored map: RED=buildings on farmland · YELLOW=changed vegetation · GREEN=stable 
+agriculture 
+ 
+ 
+
+--- Page 3 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+2.  Models — Introduction, Pretrained Usage & Code 
+This section covers every model used in the project. For each model you will find: what it is, why we chose it, 
+how to load and use it as a pretrained model (no training required), the exact input format it expects, the 
+output it produces, and working PyTorch code. 
+  STEP 01  Data Acquisition   [ Weeks 1–2 ] 
+  Before running any model, we need satellite imagery. We use two free data sources: Sentinel-2 (10m resolution, 13 
+bands, from ESA) and Landsat-8/9 (30m resolution, from USGS). Google Earth Engine (GEE) is a cloud platform that 
+gives free access to both, so we can download images directly without manual searching. 
+ 
+  Google Earth Engine (GEE) — Data Platform 
+What is it? 
+GEE is not a model — it is a cloud-based geospatial platform that holds petabytes of satellite data. 
+You write a short JavaScript or Python script to define your area, date range, and cloud filter, and it 
+exports the image directly to your Google Drive or local machine. 
+Why use it? 
+It gives free access to Sentinel-2, Landsat-8/9, and hundreds of other datasets without 
+downloading anything manually. It handles tiling, reprojection, and band selection automatically. 
+Pretrained 
+Usage 
+No model to load. Just authenticate and run the export script. 
+Documentation 
+GEE Official Guide: developers.google.com/earth-engine/guides/getstarted 
+YouTube 
+Tutorial 
+YouTube: 'Google Earth Engine Full Tutorial for Beginners' — Spatial Thoughts (Ujaval Gandhi) 
+MODEL INPUT 
+AOI polygon (lat/lon), date range (T1 start–end, T2 start–end), cloud cover threshold (e.g. < 20%) 
+MODEL 
+OUTPUT 
+GeoTIFF file(s) with all bands, spatial resolution 10m or 30m, CRS: WGS84 / UTM, saved to Drive 
+ 
+Code Example (PyTorch): 
+# Python — install: pip install earthengine-api 
+import ee 
+ee.Authenticate()   # one-time login 
+ee.Initialize() 
+ 
+aoi = ee.Geometry.Rectangle([lon_min, lat_min, lon_max, lat_max]) 
+collection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED') 
+    .filterBounds(aoi) 
+    .filterDate('2022-01-01', '2022-03-31') 
+    .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20)) 
+image = collection.median().clip(aoi) 
+ 
+# Export to Google Drive 
+task = ee.batch.Export.image.toDrive( 
+    image=image.select(['B4','B3','B2','B8','B11']), 
+    description='T1_sentinel2', 
+    scale=10, region=aoi) 
+task.start() 
+ 
+  STEP 02  Cloud Detection   [ Weeks 2–3 ] 
+  Cloud detection is a semantic segmentation task: for every pixel in the image, the model decides whether it is a cloud or 
+clear sky. We use a U-Net architecture with a pretrained ResNet34 encoder. The encoder was trained on ImageNet and 
+
+--- Page 4 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+already understands edges, textures, and shapes — making it excellent at detecting cloud boundaries even without 
+satellite-specific training. 
+ 
+  U-Net + ResNet34 (segmentation-models-pytorch) 
+What is it? 
+U-Net is an encoder-decoder segmentation network. The encoder (ResNet34) compresses the 
+image into feature maps, and the decoder expands them back to a full-size mask. The encoder 
+weights come pretrained from ImageNet — we use the decoder as-is for general cloud detection 
+without any fine-tuning. 
+Why use it? 
+The pretrained ResNet34 encoder detects low-level features (edges, brightness gradients) that are 
+exactly what separates clouds from land. U-Net's skip connections preserve spatial detail for sharp 
+mask edges. 
+Pretrained 
+Usage 
+The encoder loads ImageNet weights automatically via the encoder_weights='imagenet' argument. 
+No checkpoint download needed. 
+Documentation 
+Docs: smp.readthedocs.io | GitHub: github.com/qubvel/segmentation_models.pytorch 
+YouTube 
+Tutorial 
+YouTube: 'Image Segmentation with PyTorch and SMP' — Aleksei Shpilman | 'U-Net from Scratch 
+in PyTorch' — DigitalSreeni 
+MODEL INPUT 
+RGB tile tensor: shape (1, 3, 512, 512), float32, normalized with ImageNet mean/std 
+MODEL 
+OUTPUT 
+Cloud probability map: shape (1, 1, 512, 512), float32, values 0.0–1.0 per pixel 
+ 
+Code Example (PyTorch): 
+# pip install segmentation-models-pytorch torch torchvision 
+import torch 
+import segmentation_models_pytorch as smp 
+ 
+# Load pretrained model — NO training needed 
+model = smp.Unet( 
+    encoder_name='resnet34', 
+    encoder_weights='imagenet',  # loads pretrained weights automatically 
+    in_channels=3, 
+    classes=1, 
+    activation=None 
+) 
+model.eval() 
+ 
+# Run inference on a tile 
+tile = torch.rand(1, 3, 512, 512)  # replace with real tile 
+with torch.no_grad(): 
+    logits = model(tile)           # shape: (1, 1, 512, 512) 
+    prob_map = torch.sigmoid(logits)  # cloud probability 0–1 
+    mask = (prob_map > 0.45).float()  # binary cloud mask 
+ 
+ 
+ 
+
+--- Page 5 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+  STEP 03  Cloud Removal (Inpainting)   [ Weeks 3–4 ] 
+  After detecting which pixels are cloud, we need to reconstruct the missing surface information underneath. This is called 
+inpainting. We use OpenCV's Telea algorithm — a classical method that fills masked regions by propagating information 
+from surrounding clear pixels. For larger cloud regions, DSen2-CR (a deep learning model) gives smoother results. 
+ 
+  OpenCV Inpainting — Telea Algorithm 
+What is it? 
+The Telea algorithm fills masked (cloud) pixels by computing a weighted average of known pixels 
+in the surrounding neighborhood, working from the mask boundary inward. It runs per-band 
+independently, so it works on any number of spectral bands. 
+Why use it? 
+Fast, no GPU needed, no model weights to load, and works well for small-to-medium cloud 
+patches. Best choice when cloud coverage is under 40%. 
+Pretrained 
+Usage 
+Classical algorithm — no pretrained weights. Just call cv2.inpaint(). 
+Documentation 
+OpenCV Docs: docs.opencv.org/4.x/df/d3d/tutorial_py_inpainting.html 
+YouTube 
+Tutorial 
+YouTube: 'Image Inpainting with OpenCV in Python' — Nicolai Nielsen 
+MODEL INPUT 
+Single band image: (H, W) uint8, cloud mask: (H, W) uint8 (255=cloud, 0=clear), inpaint radius (int) 
+MODEL 
+OUTPUT 
+Inpainted band: (H, W) uint8, cloud pixels replaced with estimated surface reflectance values 
+ 
+Code Example (PyTorch): 
+# pip install opencv-python numpy rasterio 
+import cv2 
+import numpy as np 
+import rasterio 
+ 
+def remove_clouds(image_path, mask, inpaint_radius=7): 
+    with rasterio.open(image_path) as src: 
+        meta = src.meta.copy() 
+        cleaned = np.zeros_like(src.read(), dtype=np.uint8) 
+        for b in range(src.count): 
+            band = src.read(b+1) 
+            # normalize to uint8 
+            band_u8 = cv2.normalize(band, None, 0, 255, 
+                                    cv2.NORM_MINMAX).astype(np.uint8) 
+            # inpaint cloud pixels 
+            cleaned[b] = cv2.inpaint(band_u8, mask, 
+                           inpaint_radius, cv2.INPAINT_TELEA) 
+    return cleaned  # shape: (bands, H, W) 
+ 
+  STEP 04  Preprocessing & Spectral Indices   [ Week 5 ] 
+  Before running change detection, we compute spectral indices that highlight specific land types. NDVI (Normalized 
+Difference Vegetation Index) is high for healthy crops and low for bare soil or buildings. NDBI (Normalized Difference Built-
+up Index) is high for concrete/rooftops. These indices give the change detection model much richer signals than raw pixel 
+values alone. 
+ 
+  Spectral Index Computation — NumPy / rasterio 
+
+--- Page 6 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+What is it? 
+Spectral indices are mathematical formulas applied band-by-band to the image array. No neural 
+network is involved — just arithmetic on the pixel values using NumPy. NDVI uses the Near-
+Infrared and Red bands. NDBI uses the Short-Wave Infrared and NIR bands. 
+Why use it? 
+Index maps compress complex multispectral data into single-band images that directly encode 
+vegetation health or built-up density. This makes the job of downstream models much easier. 
+Pretrained 
+Usage 
+No model. Pure NumPy computation. 
+Documentation 
+rasterio Docs: rasterio.readthedocs.io | NDVI on Sentinel-2: sentinel-
+hub.com/develop/documentation/eo_products/Sentinel2EOproducts 
+YouTube 
+Tutorial 
+YouTube: 'Calculate NDVI with Python and Rasterio' — Open Source Options | 'Spectral Indices 
+for Remote Sensing' — GIS & Remote Sensing channel 
+MODEL INPUT 
+Cloud-free GeoTIFF T1 and T2 with NIR (B8), Red (B4), SWIR (B11), Green (B3) bands — shape 
+(bands, H, W) 
+MODEL 
+OUTPUT 
+NDVI array (H, W) float32 in [-1, 1] | NDBI array (H, W) float32 in [-1, 1] | MNDWI array (H, W) 
+float32 in [-1, 1] 
+ 
+Code Example (PyTorch): 
+import numpy as np 
+import rasterio 
+ 
+def compute_indices(image_path): 
+    with rasterio.open(image_path) as src: 
+        # Sentinel-2 band order (1-indexed): B2=1,B3=2,B4=3,B8=4,B11=5 
+        red  = src.read(3).astype(np.float32)  # Band 4 
+        nir  = src.read(4).astype(np.float32)  # Band 8 
+        swir = src.read(5).astype(np.float32)  # Band 11 
+        grn  = src.read(2).astype(np.float32)  # Band 3 
+ 
+    eps = 1e-10  # avoid division by zero 
+    ndvi  = (nir - red)  / (nir + red  + eps)  # vegetation 
+    ndbi  = (swir - nir) / (swir + nir + eps)  # built-up 
+    mndwi = (grn - swir) / (grn + swir + eps)  # water 
+    return ndvi, ndbi, mndwi 
+ 
+ 
+ 
+
+--- Page 7 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+  STEP 05  Land-Use Change Detection   [ Weeks 6–8 ] 
+  Change detection compares two co-registered images (T1 = before, T2 = after) at the pixel level and predicts which 
+pixels have changed and which have not. We use ChangeFormer — a Siamese Transformer model pretrained on the 
+LEVIR-CD and WHU-CD building change datasets. It takes both images simultaneously and outputs a binary change 
+map. 
+ 
+  ChangeFormer — Siamese Transformer for Change Detection 
+What is it? 
+ChangeFormer is a dual-branch (Siamese) network. Both branches share the same Transformer 
+encoder (MixTransformer from SegFormer). Each branch processes one image (T1 or T2), and a 
+difference module at the decoder detects changed regions. Pretrained weights are available on the 
+LEVIR-CD dataset (building changes in urban areas). 
+Why use it? 
+Transformer encoders capture long-range spatial relationships — critical for detecting gradual 
+land-use changes. ChangeFormer consistently outperforms CNN-based methods on public 
+benchmarks. Pretrained on building-change data, it is highly relevant for detecting new 
+construction on farmland. 
+Pretrained 
+Usage 
+Download pretrained weights from the official GitHub repo. Load with torch.load(). 
+Documentation 
+GitHub: github.com/wgcban/ChangeFormer | Paper: arxiv.org/abs/2201.01293 
+YouTube 
+Tutorial 
+YouTube: 'Change Detection in Remote Sensing — Deep Learning' — Geocomputazione | 
+'ChangeFormer Walkthrough' — search on YouTube 
+MODEL INPUT 
+Two co-registered RGB image tensors: T1 shape (1,3,256,256) and T2 shape (1,3,256,256), 
+float32, normalized ImageNet mean/std 
+MODEL 
+OUTPUT 
+Binary change map: shape (1,1,256,256), 1=changed pixel, 0=unchanged pixel 
+ 
+Code Example (PyTorch): 
+# Clone repo: git clone https://github.com/wgcban/ChangeFormer 
+# pip install torch torchvision einops 
+import torch 
+from models.ChangeFormer import ChangeFormerV6 
+ 
+# Load model + pretrained weights 
+model = ChangeFormerV6() 
+ckpt = torch.load('pretrained/ChangeFormer_LEVIR.pth', 
+                   map_location='cpu') 
+model.load_state_dict(ckpt, strict=False) 
+model.eval() 
+ 
+# Run inference — T1 and T2 are normalized tensors 
+with torch.no_grad(): 
+    pred = model(t1_tensor, t2_tensor)  # list of predictions 
+    change_map = torch.argmax(pred[-1], dim=1)  # (1, H, W) 
+    # 1 = changed, 0 = no change 
+ 
+  STEP 06  Agricultural Land Segmentation   [ Weeks 8–9 ] 
+  We need to know exactly which pixels were agricultural land in T1 (before). We use SegFormer, a transformer-based 
+segmentation model from NVIDIA, pretrained on the ADE20K dataset (150 semantic classes including farmland, grass, 
+and fields). We load the pretrained model from HuggingFace and run inference directly — no fine-tuning needed. 
+ 
+  SegFormer-B4 (HuggingFace Transformers — PyTorch) 
+
+--- Page 8 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+What is it? 
+SegFormer is a hierarchical Transformer encoder (Mix Transformer, MiT) combined with a 
+lightweight MLP decoder. The B4 variant provides a strong balance between accuracy and speed. 
+Pretrained on ADE20K, it recognizes 150 land-cover classes including field, earth, dirt, grass, and 
+farm categories that map directly to agricultural land. 
+Why use it? 
+HuggingFace makes it trivially easy to load SegFormer with one line. ADE20K includes agriculture-
+relevant classes. The model generalizes well to satellite imagery because it was trained on diverse 
+outdoor scenes. 
+Pretrained 
+Usage 
+Weights download automatically from HuggingFace when you call from_pretrained(). No manual 
+download needed. 
+Documentation 
+HuggingFace Model Card: huggingface.co/nvidia/segformer-b4-finetuned-ade-512-512 | 
+HuggingFace Docs: huggingface.co/docs/transformers/model_doc/segformer 
+YouTube 
+Tutorial 
+YouTube: 'SegFormer Semantic Segmentation with HuggingFace PyTorch' — Weights & Biases | 
+'Land Cover Segmentation with PyTorch' — Ujaval Gandhi 
+MODEL INPUT 
+RGB image array (H, W, 3) uint8, any size — model handles resizing internally | Or: preprocessed 
+tensor (1, 3, 512, 512) with SegFormer processor 
+MODEL 
+OUTPUT 
+Semantic label map: (H, W) int64, each pixel = class ID (0–149) | Filtered agriculture mask: (H, W) 
+uint8, 255=farmland, 0=other 
+ 
+Code Example (PyTorch): 
+# pip install transformers torch Pillow numpy 
+from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation 
+from PIL import Image 
+import torch, numpy as np 
+ 
+# Load model + processor — downloads automatically 
+processor = SegformerImageProcessor.from_pretrained( 
+    'nvidia/segformer-b4-finetuned-ade-512-512') 
+model = SegformerForSemanticSegmentation.from_pretrained( 
+    'nvidia/segformer-b4-finetuned-ade-512-512') 
+model.eval() 
+ 
+image = Image.open('T1_cloud_free.png').convert('RGB') 
+inputs = processor(images=image, return_tensors='pt') 
+ 
+with torch.no_grad(): 
+    outputs = model(**inputs) 
+    logits = outputs.logits  # (1, 150, H/4, W/4) 
+ 
+# Upsample to original size 
+import torch.nn.functional as F 
+upsampled = F.interpolate(logits, size=image.size[::-1], 
+                          mode='bilinear', align_corners=False) 
+seg_map = upsampled.argmax(dim=1).squeeze().numpy()  # (H, W) 
+ 
+# ADE20K agriculture-related class IDs: 9=field,29=earth,92=grass 
+agri_ids = [9, 29, 92, 94, 96] 
+agri_mask = np.isin(seg_map, agri_ids).astype(np.uint8) * 255 
+ 
+ 
+ 
+
+--- Page 9 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+  STEP 07  Building Detection on Farmland   [ Weeks 9–11 ] 
+  We now detect which changed pixels (from Step 5) that overlap with agricultural land (from Step 6) contain buildings. We 
+use two complementary approaches: SAM (Segment Anything Model from Meta) for zero-shot segmentation of any object, 
+and YOLOv8-seg for fast instance-level building detection using SpaceNet pretrained weights. 
+ 
+  SAM — Segment Anything Model (Meta AI) 
+What is it? 
+SAM is a foundation model for image segmentation trained on 1.1 billion masks. Given any image, 
+SAM can segment every object automatically without any labels or fine-tuning. It operates in three 
+modes: automatic (segments everything), point-prompted (click on a building), and box-prompted 
+(draw a box). We use the automatic mode on changed areas to isolate building footprints. 
+Why use it? 
+SAM works zero-shot on satellite imagery without any training. It handles irregular building shapes, 
+partial rooftops, and high-density construction that rule-based methods miss. 
+Pretrained 
+Usage 
+Download SAM weights (vit_h ~2.5GB or vit_b ~375MB) from the official GitHub. Load with 
+build_sam(). 
+Documentation 
+GitHub: github.com/facebookresearch/segment-anything | Paper: arxiv.org/abs/2304.02643 | 
+Demo: segment-anything.com 
+YouTube 
+Tutorial 
+YouTube: 'Segment Anything Model (SAM) — Full Tutorial' — AssemblyAI | 'SAM for Satellite 
+Images' — search YouTube 
+MODEL INPUT 
+RGB image array: (H, W, 3) uint8, in the changed+agricultural overlap region | Optional: point 
+prompts (x,y) or bounding box prompts 
+MODEL 
+OUTPUT 
+List of segmentation masks, each mask: (H, W) bool array | Each mask has score, bbox, and area 
+attributes 
+ 
+Code Example (PyTorch): 
+# pip install segment-anything torch torchvision 
+# Download weights: wget 
+https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth 
+from segment_anything import sam_model_registry, SamAutomaticMaskGenerator 
+import numpy as np 
+ 
+# Load pretrained SAM (vit_b = lightweight, vit_h = best accuracy) 
+sam = sam_model_registry['vit_b'](checkpoint='sam_vit_b_01ec64.pth') 
+sam.eval() 
+ 
+mask_generator = SamAutomaticMaskGenerator( 
+    model=sam, 
+    points_per_side=32, 
+    pred_iou_thresh=0.88, 
+    stability_score_thresh=0.95, 
+    min_mask_region_area=100,   # ignore tiny patches 
+) 
+ 
+# Run on the changed+agricultural region 
+image_rgb = ...  # (H, W, 3) uint8 
+masks = mask_generator.generate(image_rgb) 
+# masks[i]['segmentation'] = (H, W) bool mask for one object 
+ 
+  YOLOv8-seg — Instance Segmentation (Ultralytics) 
+What is it? 
+YOLOv8-seg is the segmentation variant of YOLOv8. It detects objects (bounding boxes) and 
+simultaneously predicts per-instance segmentation masks. We use the pretrained COCO weights, 
+
+--- Page 10 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+then optionally fine-tune on SpaceNet building data for 5–10 epochs to improve satellite-domain 
+accuracy. 
+Why use it? 
+YOLOv8-seg is extremely fast (real-time capable), provides confidence scores per building, and 
+handles overlapping buildings better than pure segmentation models. The Ultralytics library makes 
+pretrained inference extremely simple. 
+Pretrained 
+Usage 
+Model weights download automatically via Ultralytics when you call YOLO('yolov8m-seg.pt'). 
+SpaceNet fine-tuned weights available on HuggingFace. 
+Documentation 
+Ultralytics Docs: docs.ultralytics.com | GitHub: github.com/ultralytics/ultralytics 
+YouTube 
+Tutorial 
+YouTube: 'YOLOv8 Segmentation Complete Tutorial' — Ultralytics Official | 'Train YOLOv8 on 
+Custom Data' — Nicholas Renotte 
+MODEL INPUT 
+RGB image array or path to PNG/GeoTIFF tile, any size (model auto-resizes to 640x640) | 
+Confidence threshold (default 0.25) 
+MODEL 
+OUTPUT 
+Results object containing: boxes (N, 4) — bounding boxes | masks (N, H, W) — per-building binary 
+masks | scores (N,) — confidence per detection 
+ 
+Code Example (PyTorch): 
+# pip install ultralytics 
+from ultralytics import YOLO 
+import numpy as np 
+ 
+# Load pretrained YOLOv8 segmentation model 
+model = YOLO('yolov8m-seg.pt')  # downloads automatically 
+ 
+# Run inference on satellite tile 
+results = model.predict( 
+    source='T2_changed_region.png', 
+    conf=0.30,        # confidence threshold 
+    iou=0.45,         # NMS IoU threshold 
+    imgsz=640,        # inference size 
+    device='cpu',     # or 'cuda' if GPU available 
+) 
+ 
+# Extract building masks 
+for result in results: 
+    if result.masks is not None: 
+        for i, mask in enumerate(result.masks.data): 
+            building_mask = mask.numpy()  # (H, W) float32 
+            confidence = result.boxes.conf[i].item() 
+            # apply to agricultural+changed overlap area 
+ 
+  STEP 08  Final Output — Colored Change Map   [ Weeks 11–12 ] 
+  The final step combines all masks from previous steps into a single visualized output. We overlay colored regions on the 
+original RGB image: red for buildings detected on farmland, yellow for vegetation that changed but no building detected, 
+and green for stable agricultural areas. The result is exported as GeoTIFF (georeferenced), PNG (visual), and a summary 
+JSON report. 
+ 
+  OpenCV + NumPy — Color Overlay & Visualization 
+What is it? 
+No neural network is used in this step. We use NumPy to combine the masks from Steps 5, 6, and 
+7 using logical operations (AND, OR), then use OpenCV to apply color overlays on the original 
+
+--- Page 11 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+image using alpha blending. GeoPandas converts the pixel masks to vector polygons for the 
+GeoJSON export. 
+Why use it? 
+Lightweight, fast, and produces both raster (GeoTIFF) and vector (GeoJSON/Shapefile) outputs 
+that can be opened in QGIS, Google Earth, or any GIS tool. 
+Pretrained 
+Usage 
+No model. Pure NumPy/OpenCV/GeoPandas operations. 
+Documentation 
+GeoPandas Docs: geopandas.org | Folium Docs: python-visualization.github.io/folium 
+YouTube 
+Tutorial 
+YouTube: 'GeoPandas Tutorial — Geospatial Data in Python' — Coding is Fun | 'Create Interactive 
+Maps with Folium' — Data Professor 
+MODEL INPUT 
+change_map (H,W) uint8 from Step 5 | agri_mask (H,W) uint8 from Step 6 | building_mask (H,W) 
+uint8 from Step 7 | original T2 RGB image (H,W,3) 
+MODEL 
+OUTPUT 
+final_colored.png — RGB image with color overlays | final_colored.tif — GeoTIFF with 
+georeferencing | encroachment.geojson — building polygons | report.json — area lost in hectares, 
+% encroachment, building count 
+ 
+Code Example (PyTorch): 
+import numpy as np, cv2 
+import rasterio, json 
+from rasterio.features import shapes 
+import geopandas as gpd 
+ 
+def colorize_output(rgb, change_map, agri_mask, building_mask): 
+    output = rgb.copy() 
+    alpha = 0.55  # overlay transparency 
+ 
+    # Buildings on farmland = RED 
+    encroach = (building_mask>0) & (agri_mask>0) & (change_map>0) 
+    output[encroach] = (output[encroach]*(1-alpha) + 
+                        np.array([255,40,40])*alpha).astype(np.uint8) 
+ 
+    # Changed vegetation (no building) = YELLOW 
+    veg_change = (change_map>0) & (agri_mask>0) & ~encroach 
+    output[veg_change] = (output[veg_change]*(1-alpha) + 
+                          np.array([255,220,0])*alpha).astype(np.uint8) 
+ 
+    # Stable agriculture = GREEN tint 
+    stable = (agri_mask>0) & (change_map==0) 
+    output[stable] = (output[stable]*(1-alpha) + 
+                      np.array([40,200,80])*alpha).astype(np.uint8) 
+    return output 
+ 
+colored = colorize_output(t2_rgb, change_map, agri_mask, building_mask) 
+cv2.imwrite('final_colored.png', cv2.cvtColor(colored, cv2.COLOR_RGB2BGR)) 
+ 
+ 
+ 
+
+--- Page 12 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+3.  Full Pipeline — Data Flow (Input & Output per Step) 
+The table below shows the complete data flow through the pipeline: what each step receives as input, which 
+model processes it, and what it passes to the next step. 
+# 
+STEP 
+MODEL 
+USED 
+INPUT REQUIRED 
+OUTPUT 
+PRODUCED 
+01 
+Data 
+Acquisition 
+GEE / rasterio 
+AOI coords, date range, cloud filter % 
+GeoTIFF files — T1 
+and T2, all bands, 
+10–30m resolution 
+02 
+Cloud 
+Detection 
+U-Net + 
+ResNet34 
+GeoTIFF bands → RGB tiles (1,3,512,512) float32 
+normalized 
+Cloud probability 
+map (H,W) float32 + 
+binary mask (H,W) 
+uint8 
+03 
+Cloud 
+Removal 
+OpenCV Telea 
+Cloudy GeoTIFF (all bands) + binary cloud mask (H,W) 
+uint8 
+Cloud-free GeoTIFF 
+— all bands 
+reconstructed 
+(H,W,B) float32 
+04 
+Spectral 
+Indices 
+NumPy / 
+rasterio 
+Cloud-free T1 and T2 GeoTIFFs with NIR, Red, SWIR, 
+Green bands 
+NDVI (H,W), NDBI 
+(H,W), MNDWI 
+(H,W) — float32 
+arrays [-1 to 1] 
+05 
+Change 
+Detection 
+ChangeFormer 
+T1 tensor (1,3,256,256) + T2 tensor (1,3,256,256) float32 
+normalized 
+Binary change map 
+(H,W) uint8 — 
+255=changed, 0=no 
+change 
+06 
+Agriculture 
+Segmentation 
+SegFormer-B4 
+T1 cloud-free RGB image (H,W,3) uint8 
+Agriculture mask 
+(H,W) uint8 — 
+255=farmland, 
+0=non-agricultural 
+07 
+Building 
+Detection 
+SAM + 
+YOLOv8-seg 
+T2 RGB image in changed+agricultural overlap area 
+(H,W,3) uint8 
+Building mask (H,W) 
+uint8 + instance 
+polygons list + 
+confidence scores 
+08 
+Final Output 
+OpenCV / 
+GeoPandas 
+change_map + agri_mask + building_mask + T2 RGB 
+image 
+Colored PNG, 
+GeoTIFF, GeoJSON 
+polygons, JSON 
+report with area stats 
+ 
+ 
+
+--- Page 13 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+4.  Pipeline Steps — Summary Reference 
+Quick-reference tables for each step including all resources, models, and links. 
+Step undefined  |  undefined   [ undefined ] 
+INPUT 
+AOI coordinates, date range, cloud filter <30% 
+OUTPUT 
+Multi-temporal GeoTIFF, Sentinel-2 / Landsat, 12+ bands 
+MODELS 
+Google Earth Engine, Sentinel-2 L2A (Copernicus), Landsat-8/9 (USGS), rasterio 
+RESOURCES 
+developers.google.com/earth-engine | scihub.copernicus.eu 
+YOUTUBE 
+YouTube: 'Google Earth Engine Tutorial for Beginners' — Spatial Thoughts 
+ 
+Step undefined  |  undefined   [ undefined ] 
+INPUT 
+Raw GeoTIFF (12 bands), image tiles (512x512 px) 
+OUTPUT 
+Binary cloud mask (255=cloud/0=clear), probability heatmap, coverage % 
+MODELS 
+U-Net + ResNet34 (segmentation-models-pytorch, ImageNet pretrained), SCL band 
+RESOURCES 
+github.com/qubvel/segmentation_models.pytorch | github.com/SorourMo/38-Cloud 
+YOUTUBE 
+YouTube: 'U-Net Segmentation PyTorch' — DigitalSreeni 
+COURSERA 
+Coursera: 'Convolutional Neural Networks' — DeepLearning.AI (Andrew Ng) 
+ 
+Step undefined  |  undefined   [ undefined ] 
+INPUT 
+Cloudy GeoTIFF (all bands) + binary cloud mask 
+OUTPUT 
+Cloud-free GeoTIFF with all bands reconstructed 
+MODELS 
+OpenCV Telea Inpainting, DSen2-CR (optional deep learning), Temporal Compositing 
+RESOURCES 
+docs.opencv.org/4.x/df/d3d/tutorial_py_inpainting.html | github.com/ameraner/dsen2-cr 
+YOUTUBE 
+YouTube: 'Image Inpainting OpenCV Python' — Nicolai Nielsen 
+COURSERA 
+GEE Compositing: developers.google.com/earth-engine/guides/ic_composite_mosaic 
+ 
+ 
+ 
+
+--- Page 14 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+Step undefined  |  undefined   [ undefined ] 
+INPUT 
+Cloud-free T1 and T2 GeoTIFFs with all spectral bands 
+OUTPUT 
+NDVI, NDBI, MNDWI maps — float32 arrays, co-registered image pair 
+MODELS 
+NumPy band math, rasterio, GDAL, QGIS 
+RESOURCES 
+rasterio.readthedocs.io | qgis.org 
+YOUTUBE 
+YouTube: 'NDVI Python Remote Sensing' — Open Source Options 
+COURSERA 
+Coursera: 'Remote Sensing & GIS Fundamentals' — UC Davis 
+ 
+Step undefined  |  undefined   [ undefined ] 
+INPUT 
+T1 and T2 RGB tensors (1,3,256,256) float32 normalized 
+OUTPUT 
+Binary change map (H,W), change area in hectares 
+MODELS 
+ChangeFormer (Siamese Transformer), BIT-CD, FC-EF / FC-Siam-Diff 
+RESOURCES 
+github.com/wgcban/ChangeFormer | paperswithcode.com/task/change-detection 
+YOUTUBE 
+YouTube: 'Change Detection in Satellite Imagery — PyTorch' — Geocomputazione 
+ 
+ 
+ 
+
+--- Page 15 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+Step undefined  |  undefined   [ undefined ] 
+INPUT 
+T1 cloud-free RGB image (H,W,3) uint8 
+OUTPUT 
+Agriculture mask (H,W) uint8, farmland area in hectares 
+MODELS 
+SegFormer-B4 (HuggingFace, ADE20K pretrained), ESRI Land Cover 2023, DynamicWorld (GEE) 
+RESOURCES 
+huggingface.co/nvidia/segformer-b4-finetuned-ade-512-512 | livingatlas.arcgis.com 
+YOUTUBE 
+YouTube: 'SegFormer HuggingFace PyTorch Tutorial' — Weights & Biases 
+COURSERA 
+Coursera: 'Deep Neural Networks with PyTorch' — IBM 
+ 
+Step undefined  |  undefined   [ undefined ] 
+INPUT 
+T2 RGB image in changed+agricultural overlap area (H,W,3) uint8 
+OUTPUT 
+Building footprint polygons, buildings-on-farmland mask, encroachment score 
+MODELS 
+SAM (Meta AI, zero-shot), YOLOv8-seg (Ultralytics), Microsoft Building Footprints 
+RESOURCES 
+github.com/facebookresearch/segment-anything | docs.ultralytics.com | spacenet.ai 
+YOUTUBE 
+YouTube: 'SAM Segment Anything Tutorial' — AssemblyAI | 'YOLOv8-seg Tutorial' — Ultralytics 
+ 
+ 
+ 
+
+--- Page 16 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+Step undefined  |  undefined   [ undefined ] 
+INPUT 
+change_map + agri_mask + building_mask + T2 RGB image 
+OUTPUT 
+RED=buildings on farmland | YELLOW=changed vegetation | GREEN=stable agriculture | GeoTIFF 
++ PNG + JSON report 
+MODELS 
+OpenCV, Matplotlib, GeoPandas, Folium, rasterio, QGIS 
+RESOURCES 
+geopandas.org | python-visualization.github.io/folium 
+YOUTUBE 
+YouTube: 'GeoPandas Geospatial Visualization Python' — Coding is Fun 
+COURSERA 
+Coursera: 'AI for Good — Remote Sensing' — DeepLearning.AI 
+ 
+ 
+ 
+
+--- Page 17 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+5.  Project Timeline — 12 Weeks (March to May 2026) 
+Gantt-style timeline showing when each step runs across the 3-month period. 
+STEP 
+MONTH 1 — MARCH 
+MONTH 2 — APRIL 
+MONTH 3 — MAY 
+ 
+W1 
+W2 
+W3 
+W4 
+W5 
+W6 
+W7 
+W8 
+W9 
+W10 
+W11 
+W12 
+01.  
+Data Acquisition 
+Weeks 1–2 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+02.  
+Cloud Detection 
+ 
+Weeks 2–3 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+03.  
+Cloud Removal 
+ 
+ 
+Weeks 3–4 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+04.  
+Preprocessing & 
+Indices 
+ 
+ 
+ 
+ 
+Week 5 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+05.  
+Change Detection 
+ 
+ 
+ 
+ 
+ 
+Weeks 6–8 
+ 
+ 
+ 
+ 
+ 
+ 
+06.  
+Agriculture 
+Segmentation 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Weeks 8–9 
+ 
+ 
+ 
+ 
+07.  
+Building Detection 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Weeks 9–11 
+ 
+ 
+ 
+08.  
+Final Output & 
+Alerts 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Weeks 11–
+12 
+ 
+MILESTONES 
+ 
+ 
+Cloud 
+Masks 
+ 
+Clean 
+Images 
+ 
+ 
+Change 
+Map 
+ 
+ 
+ 
+DONE 
+ 
+6.  Key Milestones 
+Major deliverables and checkpoint dates. 
+WEEK 
+DATE 
+MILESTONE 
+MODEL USED 
+Week 3 
+End of 
+March 
+Cloud masks validated for all scenes 
+U-Net + Cloud-
+Net 
+Week 5 
+Early April 
+Clean cloud-free image pair (T1 & T2) ready 
+DSen2-CR / 
+OpenCV 
+Week 8 
+Late April 
+Land-use change map generated 
+ChangeFormer / 
+BIT-CD 
+Week 9 
+Early May 
+Agricultural land mask complete 
+SegFormer-B4 
+Week 
+11 
+Mid May 
+Building-on-farmland detection complete 
+SAM / YOLOv8-
+seg 
+Week 
+12 
+End of May 
+Final colored output map & project report done 
+QGIS / Folium / 
+GeoPandas 
+ 
+ 
+
+--- Page 18 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+7.  Technology Stack Summary 
+Category 
+Library / Tool 
+Purpose 
+Data Access 
+Google Earth Engine, 
+rasterio, GDAL 
+Download and read satellite imagery 
+Cloud 
+Detection 
+segmentation-models-
+pytorch, PyTorch 
+U-Net + ResNet34 for cloud masking 
+Cloud Removal 
+OpenCV, DSen2-CR, 
+NumPy 
+Inpainting cloud pixels 
+Preprocessing 
+rasterio, NumPy, GDAL, 
+QGIS 
+Band math, NDVI, NDBI computation 
+Change 
+Detection 
+ChangeFormer, BIT-
+CD, PyTorch 
+Detect changed land pixels 
+Segmentation 
+HuggingFace 
+Transformers, 
+SegFormer-B4 
+Identify agricultural land 
+Building 
+Detection 
+SAM (Meta AI), 
+YOLOv8-seg, Ultralytics 
+Extract building footprints 
+Visualization 
+GeoPandas, Folium, 
+Matplotlib, QGIS 
+Color maps, reports, GeoJSON 
+Alerting 
+Python smtplib, Slack 
+Webhooks 
+Email/Slack pipeline notifications 
+ 
+8.  Recommended Learning Resources 
+RESOURCE / COURSE 
+PLATFORM 
+WHAT YOU WILL LEARN 
+Deep Learning 
+Specialization (5 
+courses) 
+Coursera — Andrew Ng 
+/ DeepLearning.AI 
+Full deep learning: CNNs, optimization, segmentation 
+Deep Neural Networks 
+with PyTorch 
+Coursera — IBM 
+PyTorch fundamentals, CNNs, transfer learning 
+Remote Sensing & 
+GIS Fundamentals 
+Coursera — UC Davis 
+Satellite imagery, GIS basics, spatial analysis 
+AI for Good — Remote 
+Sensing 
+Coursera — 
+DeepLearning.AI 
+Applied AI for land monitoring 
+Complete Remote 
+Sensing with Python 
+YouTube — 
+DigitalSreeni (playlist) 
+Full Python satellite image processing series 
+Google Earth Engine 
+Full Tutorial 
+YouTube — Spatial 
+Thoughts / Ujaval 
+Gandhi 
+GEE from scratch for satellite data 
+U-Net Segmentation 
+with PyTorch 
+YouTube — 
+DigitalSreeni 
+U-Net step-by-step PyTorch implementation 
+SegFormer 
+HuggingFace Tutorial 
+YouTube — Weights & 
+Biases 
+SegFormer inference and fine-tuning 
+SAM — Segment 
+Anything Tutorial 
+YouTube — 
+AssemblyAI 
+SAM zero-shot segmentation walkthrough 
+
+--- Page 19 ---
+Food Security Project — Data & AI Team  |  Khaled Ramadan Ali 
+Confidential — Data & AI Team  |  v2.0 
+RESOURCE / COURSE 
+PLATFORM 
+WHAT YOU WILL LEARN 
+YOLOv8 
+Segmentation Tutorial 
+YouTube — Ultralytics 
+Official 
+Instance segmentation with YOLOv8 
+Satellite Image Deep 
+Learning List 
+GitHub — 
+github.com/robmarkcole 
+(5k+ stars) 
+Curated papers, datasets, and pretrained models 
+ 
+

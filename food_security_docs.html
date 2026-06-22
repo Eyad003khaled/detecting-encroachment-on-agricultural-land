@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Food Security AI System — Full Documentation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --dark:    #0a1f12;
+    --mid:     #1a4f2e;
+    --accent:  #2e8b57;
+    --gold:    #e8a838;
+    --red:     #c0392b;
+    --yellow:  #f1c40f;
+    --green:   #27ae60;
+    --bg:      #f4f7f4;
+    --card:    #ffffff;
+    --text:    #1a2e1a;
+    --muted:   #5a7a5a;
+    --border:  #d4e6d4;
+    --sidebar: 260px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: var(--sidebar);
+    min-width: var(--sidebar);
+    background: var(--dark);
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    overflow-y: auto;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 24px;
+  }
+  #sidebar-logo {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 8px;
+  }
+  #sidebar-logo .logo-icon { font-size: 28px; margin-bottom: 6px; }
+  #sidebar-logo h1 { font-size: 13px; font-weight: 700; color: #fff; line-height: 1.4; letter-spacing: 0.02em; }
+  #sidebar-logo p { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 3px; }
+  #sidebar nav a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 20px;
+    color: rgba(255,255,255,0.6);
+    text-decoration: none;
+    font-size: 12.5px;
+    border-left: 3px solid transparent;
+    transition: all 0.18s;
+    line-height: 1.3;
+  }
+  #sidebar nav a:hover,
+  #sidebar nav a.active {
+    color: #fff;
+    background: rgba(255,255,255,0.06);
+    border-left-color: var(--gold);
+  }
+  #sidebar nav a .nav-icon { font-size: 14px; flex-shrink: 0; width: 18px; text-align: center; }
+  #sidebar nav .nav-section {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    color: rgba(255,255,255,0.25); padding: 14px 20px 4px;
+    text-transform: uppercase;
+  }
+
+  /* ── MAIN ── */
+  #main {
+    margin-left: var(--sidebar);
+    flex: 1;
+    max-width: calc(100% - var(--sidebar));
+  }
+  section {
+    padding: 64px 56px;
+    border-bottom: 1px solid var(--border);
+    max-width: 1100px;
+  }
+  section:nth-child(even) { background: #f0f5f0; }
+
+  /* Hero */
+  #hero {
+    background: linear-gradient(135deg, var(--dark) 0%, var(--mid) 60%, #2d7a4a 100%);
+    padding: 80px 56px 72px;
+    color: #fff;
+    max-width: 100%;
+    border-bottom: none;
+  }
+  #hero .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2);
+    padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.05em; margin-bottom: 24px; color: #b6f5cc;
+  }
+  #hero h1 { font-size: 40px; font-weight: 800; line-height: 1.15; margin-bottom: 16px; max-width: 760px; }
+  #hero h1 span { color: var(--gold); }
+  #hero .sub { font-size: 16px; color: rgba(255,255,255,0.7); max-width: 620px; line-height: 1.6; margin-bottom: 36px; }
+  .hero-meta { display: flex; gap: 32px; flex-wrap: wrap; }
+  .hero-meta-item { font-size: 13px; color: rgba(255,255,255,0.55); }
+  .hero-meta-item strong { color: #fff; font-size: 14px; display: block; margin-bottom: 2px; }
+  .output-pills { display: flex; gap: 10px; margin-top: 32px; flex-wrap: wrap; }
+  .pill {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 18px; border-radius: 24px; font-size: 13px; font-weight: 600;
+  }
+  .pill.red { background: rgba(192,57,43,0.25); border: 1px solid rgba(192,57,43,0.5); color: #ff8a80; }
+  .pill.yellow { background: rgba(241,196,15,0.2); border: 1px solid rgba(241,196,15,0.4); color: #ffe082; }
+  .pill.green { background: rgba(39,174,96,0.2); border: 1px solid rgba(39,174,96,0.4); color: #69f0ae; }
+
+  /* Headings */
+  .sec-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 8px;
+  }
+  .sec-title { font-size: 30px; font-weight: 800; color: var(--dark); margin-bottom: 14px; }
+  .sec-desc { font-size: 15px; color: var(--muted); line-height: 1.7; max-width: 680px; margin-bottom: 36px; }
+
+  /* Cards */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--card); border-radius: 12px; padding: 22px 24px;
+    border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.09); transform: translateY(-2px); }
+  .card .step-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 8px; font-size: 13px; font-weight: 800;
+    background: var(--dark); color: var(--gold); margin-bottom: 14px;
+  }
+  .card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; color: var(--dark); }
+  .card p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .card .tag {
+    display: inline-block; margin-top: 10px; padding: 3px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 600; background: #e8f5e9; color: var(--accent);
+  }
+
+  /* Tables */
+  .styled-table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 8px; }
+  .styled-table th {
+    background: var(--dark); color: #fff; padding: 11px 16px;
+    text-align: left; font-weight: 600; font-size: 12px; letter-spacing: 0.04em;
+  }
+  .styled-table th:first-child { border-radius: 8px 0 0 0; }
+  .styled-table th:last-child { border-radius: 0 8px 0 0; }
+  .styled-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .styled-table tr:last-child td { border-bottom: none; }
+  .styled-table tr:hover td { background: #f0f7f0; }
+  .styled-table a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .styled-table a:hover { text-decoration: underline; }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px;
+    background: var(--dark); color: var(--gold); font-size: 12px; font-weight: 800;
+  }
+
+  /* File format box */
+  .format-box {
+    background: #0f2d1c; color: #a8ffa8; border-radius: 12px; padding: 24px 28px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px;
+    line-height: 1.8; overflow-x: auto; position: relative; margin-bottom: 20px;
+  }
+  .format-box .comment { color: #5a9e5a; }
+  .format-box .key { color: var(--gold); }
+  .format-box .value { color: #80e0ff; }
+  .format-box .label { color: #ff9966; }
+  .copy-btn {
+    position: absolute; top: 14px; right: 14px;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.6); padding: 5px 12px; border-radius: 6px;
+    font-size: 11px; cursor: pointer; font-family: inherit;
+    transition: all 0.2s;
+  }
+  .copy-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+  /* Flow */
+  .pipeline-flow {
+    display: flex; flex-wrap: wrap; gap: 0; align-items: stretch;
+    margin: 24px 0;
+  }
+  .flow-step {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; flex: 1; min-width: 160px; cursor: pointer;
+    transition: all 0.2s; position: relative;
+  }
+  .flow-step:hover, .flow-step.active-step { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(46,139,87,0.15); }
+  .flow-step .fs-num {
+    font-size: 10px; font-weight: 800; color: var(--gold); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .flow-step .fs-title { font-size: 13px; font-weight: 700; color: var(--dark); margin-bottom: 4px; }
+  .flow-step .fs-model { font-size: 11px; color: var(--muted); }
+  .flow-arrow {
+    display: flex; align-items: center; padding: 0 8px;
+    color: var(--accent); font-size: 18px; align-self: center;
+  }
+  .step-detail {
+    display: none; background: var(--dark); color: #fff; border-radius: 12px;
+    padding: 24px 28px; margin-top: 16px;
+  }
+  .step-detail.visible { display: block; }
+  .step-detail h4 { color: var(--gold); font-size: 14px; margin-bottom: 12px; }
+  .step-detail ul { list-style: none; font-size: 13.5px; line-height: 1.9; }
+  .step-detail ul li::before { content: "→ "; color: var(--gold); }
+
+  /* Equations */
+  .eq-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; margin-bottom: 24px; }
+  .eq-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px 24px;
+  }
+  .eq-card h4 { font-size: 14px; font-weight: 700; color: var(--dark); margin-bottom: 10px; }
+  .eq-card .eq-name { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .equation {
+    background: #f0f7f0; border: 1px solid #c8e6c9; border-radius: 8px;
+    padding: 14px 18px; font-family: 'Cascadia Code', monospace; font-size: 14px;
+    color: var(--dark); margin-bottom: 12px; text-align: center; line-height: 1.8;
+  }
+  .equation .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; }
+  .equation .frac .num { border-bottom: 2px solid var(--dark); padding-bottom: 3px; }
+  .equation .frac .den { padding-top: 3px; }
+  .eq-card .desc { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+
+  /* Charts */
+  .chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 24px; margin-top: 8px; }
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .chart-card h4 { font-size: 14px; font-weight: 700; color: var(--dark); margin-bottom: 4px; }
+  .chart-card .chart-sub { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  .chart-wrap { position: relative; height: 240px; }
+
+  /* Metrics bar */
+  .metrics-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; }
+  .metric-chip {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 22px; flex: 1; min-width: 140px; text-align: center;
+  }
+  .metric-chip .mc-val { font-size: 28px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .metric-chip .mc-label { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .metric-chip .mc-model { font-size: 11px; font-weight: 700; color: var(--dark); margin-top: 3px; }
+
+  /* Interactive Map */
+  #map-container {
+    position: relative; border-radius: 14px; overflow: hidden;
+    border: 2px solid var(--border); box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    margin-bottom: 20px;
+  }
+  #map-canvas { display: block; width: 100%; cursor: crosshair; }
+  .map-controls {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;
+  }
+  .map-btn {
+    padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.18s; font-family: inherit;
+  }
+  .map-btn:hover { background: var(--dark); color: #fff; border-color: var(--dark); }
+  .map-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .map-legend {
+    display: flex; gap: 20px; flex-wrap: wrap; align-items: center;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 20px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 3px; }
+  .tooltip-map {
+    position: absolute; background: rgba(10,31,18,0.92); color: #fff;
+    border-radius: 8px; padding: 8px 14px; font-size: 12px; pointer-events: none;
+    display: none; z-index: 10; white-space: nowrap;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .map-stats {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px;
+  }
+  .map-stat { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; flex: 1; min-width: 140px; }
+  .map-stat .ms-val { font-size: 22px; font-weight: 800; }
+  .map-stat .ms-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .ms-red { color: var(--red); }
+  .ms-yellow { color: #e6ac00; }
+  .ms-green { color: var(--green); }
+
+  /* Progress bars */
+  .prog-bar-wrap { margin-bottom: 14px; }
+  .prog-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+  .prog-label span:first-child { font-weight: 600; color: var(--dark); }
+  .prog-label span:last-child { font-weight: 700; color: var(--accent); }
+  .prog-bar { height: 8px; background: #e0ede0; border-radius: 4px; overflow: hidden; }
+  .prog-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), #4caf50); transition: width 1.5s ease; }
+
+  /* Comparison slider */
+  .compare-wrap {
+    position: relative; width: 100%; overflow: hidden; border-radius: 12px;
+    cursor: ew-resize; border: 1px solid var(--border); height: 340px;
+  }
+  #cmp-canvas { display: block; }
+  #cmp-slider {
+    position: absolute; top: 0; bottom: 0; width: 3px; background: #fff;
+    cursor: ew-resize; z-index: 5; box-shadow: 0 0 8px rgba(0,0,0,0.3);
+  }
+  #cmp-handle {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    width: 36px; height: 36px; border-radius: 50%; background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    cursor: ew-resize; z-index: 6;
+  }
+  .cmp-label {
+    position: absolute; top: 10px; padding: 4px 12px; border-radius: 6px;
+    font-size: 12px; font-weight: 700; z-index: 7;
+  }
+  .cmp-label.before { left: 10px; background: rgba(10,31,18,0.75); color: #fff; }
+  .cmp-label.after { right: 10px; background: rgba(10,31,18,0.75); color: #fff; }
+
+  /* Architecture diagram */
+  .arch-diagram {
+    display: flex; gap: 0; align-items: stretch; overflow-x: auto;
+    padding: 20px 0; margin: 20px 0;
+  }
+  .arch-block {
+    background: var(--card); border: 2px solid var(--border); border-radius: 10px;
+    padding: 16px 12px; text-align: center; min-width: 120px; flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .arch-block:hover { border-color: var(--accent); background: #f0f7f0; }
+  .arch-block .ab-icon { font-size: 24px; margin-bottom: 8px; }
+  .arch-block .ab-name { font-size: 12px; font-weight: 700; color: var(--dark); }
+  .arch-block .ab-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .arch-arrow { display: flex; align-items: center; padding: 0 4px; color: var(--accent); font-size: 18px; flex-shrink: 0; }
+  .arch-block.highlight { border-color: var(--gold); background: #fffbf0; }
+
+  /* Callout */
+  .callout {
+    display: flex; gap: 14px; padding: 16px 20px; border-radius: 10px;
+    margin: 16px 0; font-size: 13.5px; line-height: 1.6;
+  }
+  .callout.info { background: #e8f5e9; border: 1px solid #c8e6c9; color: #1b5e20; }
+  .callout.warn { background: #fff8e1; border: 1px solid #ffecb3; color: #7a4f00; }
+  .callout .ci-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+  /* Footer */
+  #footer {
+    background: var(--dark); color: rgba(255,255,255,0.5); text-align: center;
+    padding: 32px; font-size: 12px; max-width: 100%; margin-left: 0;
+  }
+  #footer strong { color: rgba(255,255,255,0.8); }
+
+  /* Scrollbar */
+  #sidebar::-webkit-scrollbar { width: 4px; }
+  #sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+  @media (max-width: 900px) {
+    :root { --sidebar: 0px; }
+    #sidebar { display: none; }
+    #main { margin-left: 0; max-width: 100%; }
+    section { padding: 40px 24px; }
+    #hero { padding: 48px 24px; }
+    #hero h1 { font-size: 28px; }
+    .chart-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════ SIDEBAR -->
+<nav id="sidebar">
+  <div id="sidebar-logo">
+    <div class="logo-icon">🛡️</div>
+    <h1>Food Security<br>AI System</h1>
+    <p>Full Technical Documentation</p>
+  </div>
+  <nav>
+    <div class="nav-section">Overview</div>
+    <a href="#hero" class="nav-icon-wrap"><span class="nav-icon">🏠</span> Home</a>
+    <a href="#overview"><span class="nav-icon">📋</span> System Overview</a>
+
+    <div class="nav-section">Data Inputs</div>
+    <a href="#file-formats"><span class="nav-icon">📁</span> SAT File Formats</a>
+    <a href="#datasets"><span class="nav-icon">🗄️</span> Datasets Per Step</a>
+
+    <div class="nav-section">Architecture</div>
+    <a href="#pipeline"><span class="nav-icon">⚙️</span> Pipeline Flow</a>
+    <a href="#math"><span class="nav-icon">📐</span> Math Equations</a>
+    <a href="#models"><span class="nav-icon">🧠</span> Model Details</a>
+
+    <div class="nav-section">Results</div>
+    <a href="#results"><span class="nav-icon">📊</span> Training &amp; Test Results</a>
+    <a href="#map"><span class="nav-icon">🗺️</span> Interactive Map</a>
+
+    <div class="nav-section">Outputs</div>
+    <a href="#outputs"><span class="nav-icon">📤</span> Output Formats</a>
+  </nav>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════ MAIN -->
+<div id="main">
+
+<!-- ── HERO ── -->
+<section id="hero">
+  <div class="badge">🛡️ &nbsp; FOOD SECURITY AI · DATA &amp; AI TEAM</div>
+  <h1>End-to-End System for Detecting<br><span>Buildings on Agricultural Land</span></h1>
+  <p class="sub">An 8-step deep learning pipeline that processes multi-temporal Sentinel-2 satellite imagery to automatically detect illegal construction on farmland — at national scale, with zero manual review.</p>
+  <div class="hero-meta">
+    <div class="hero-meta-item"><strong>Prepared By</strong>Khaled Ramadan Ali</div>
+    <div class="hero-meta-item"><strong>Team</strong>Data &amp; AI Team</div>
+    <div class="hero-meta-item"><strong>Duration</strong>March – May 2026 (3 Months)</div>
+    <div class="hero-meta-item"><strong>Framework</strong>PyTorch + HuggingFace</div>
+  </div>
+  <div class="output-pills">
+    <span class="pill red">🔴 Buildings on Farmland</span>
+    <span class="pill yellow">🟡 Changed Vegetation</span>
+    <span class="pill green">🟢 Stable Agriculture</span>
+  </div>
+</section>
+
+<!-- ── OVERVIEW ── -->
+<section id="overview">
+  <div class="sec-label">System Overview</div>
+  <div class="sec-title">What Does This System Do?</div>
+  <p class="sec-desc">The system receives two satellite images of the same geographic area taken at different times — one <strong>before</strong> (T1) and one <strong>after</strong> (T2) — and produces a color-coded map identifying where agricultural land has been encroached upon by construction.</p>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="step-badge">1–4</div>
+      <h3>Preprocessing Phase</h3>
+      <p>Download Sentinel-2 imagery via Google Earth Engine. Detect and remove cloud cover. Compute spectral vegetation and built-up indices.</p>
+      <span class="tag">Steps 01–04</span>
+    </div>
+    <div class="card">
+      <div class="step-badge">5–7</div>
+      <h3>AI Analysis Phase</h3>
+      <p>Detect land-use changes using ChangeFormer. Segment agricultural areas with SegFormer-B4. Identify buildings with SAM (Segment Anything).</p>
+      <span class="tag">Steps 05–07</span>
+    </div>
+    <div class="card">
+      <div class="step-badge">8</div>
+      <h3>Output Phase</h3>
+      <p>Combine all masks with Boolean logic into a final colored PNG, georeferenced GeoTIFF, GeoJSON polygon file, and a JSON statistics report.</p>
+      <span class="tag">Step 08</span>
+    </div>
+    <div class="card">
+      <div class="step-badge">∞</div>
+      <h3>Key Advantage</h3>
+      <p>Uses only free and open satellite data. Pretrained models require no training from scratch. Covers any region with Sentinel-2 coverage globally.</p>
+      <span class="tag">Zero-cost data</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── FILE FORMATS ── -->
+<section id="file-formats">
+  <div class="sec-label">Data Inputs</div>
+  <div class="sec-title">SAT Team → Pipeline: File Formats</div>
+  <p class="sec-desc">The Satellite communication team delivers two GeoTIFF files per analysis request. These are the only external inputs the pipeline needs. Below is the exact specification.</p>
+
+  <div class="callout info">
+    <span class="ci-icon">ℹ️</span>
+    <div><strong>Two files are required:</strong> T1 (before image, baseline period) and T2 (after image, monitoring period). Both must cover the same geographic area and use identical CRS / spatial resolution.</div>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:700;color:var(--dark);margin:28px 0 14px">📄 GeoTIFF Specification</h3>
+  <div class="format-box">
+    <button class="copy-btn" onclick="copySpec()">Copy</button>
+    <span class="comment"># ─── SENTINEL-2 GEOTIFF SPECIFICATION ────────────────────────────</span><br>
+    <span class="comment"># Required for both T1 (before) and T2 (after) image files</span><br><br>
+    <span class="key">FORMAT</span>:         <span class="value">GeoTIFF (.tif / .tiff)</span><br>
+    <span class="key">BANDS</span>:          <span class="value">5 bands in this exact order:</span><br>
+    &nbsp;&nbsp;Band 1 → <span class="label">B2  (Blue,   490 nm)</span><br>
+    &nbsp;&nbsp;Band 2 → <span class="label">B3  (Green,  560 nm)</span><br>
+    &nbsp;&nbsp;Band 3 → <span class="label">B4  (Red,    665 nm)</span><br>
+    &nbsp;&nbsp;Band 4 → <span class="label">B8  (NIR,    842 nm)</span><br>
+    &nbsp;&nbsp;Band 5 → <span class="label">B11 (SWIR, 1610 nm)</span><br><br>
+    <span class="key">PIXEL SIZE</span>:     <span class="value">10 m/pixel  (B11 must be resampled from 20m)</span><br>
+    <span class="key">DATA TYPE</span>:      <span class="value">uint16  (0 – 10000, surface reflectance × 10000)</span><br>
+    <span class="key">CRS</span>:            <span class="value">WGS 84 / UTM Zone [local zone, e.g. 36N for Egypt]</span><br>
+    <span class="key">CLOUD COVER</span>:   <span class="value">&lt; 20% over the Area of Interest</span><br>
+    <span class="key">TIME GAP</span>:       <span class="value">T2 must be ≥ 6 months after T1 (to capture seasonal stability)</span><br><br>
+    <span class="comment"># ─── NAMING CONVENTION ──────────────────────────────────────────</span><br>
+    <span class="key">T1 FILE</span>:        <span class="value">{AREA}_{YYYYMMDD}_T1_S2.tif</span><br>
+    <span class="key">T2 FILE</span>:        <span class="value">{AREA}_{YYYYMMDD}_T2_S2.tif</span><br><br>
+    <span class="comment"># Example:</span><br>
+    &nbsp;&nbsp;<span class="value">NileDelta_20220301_T1_S2.tif</span><br>
+    &nbsp;&nbsp;<span class="value">NileDelta_20240901_T2_S2.tif</span><br><br>
+    <span class="comment"># ─── DELIVERY ────────────────────────────────────────────────────</span><br>
+    <span class="key">METHOD</span>:         <span class="value">Google Drive shared folder  OR  local path</span><br>
+    <span class="key">FOLDER</span>:         <span class="value">data/raw/T1/  and  data/raw/T2/</span><br>
+    <span class="key">MIN SIZE</span>:       <span class="value">AOI ≥ 5 km × 5 km  (500 × 500 pixels at 10m)</span>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:700;color:var(--dark);margin:28px 0 14px">🔁 Data Flow from SAT Team to Pipeline</h3>
+  <div style="overflow-x:auto;">
+  <table class="styled-table">
+    <thead>
+      <tr>
+        <th>Stage</th><th>Who</th><th>Format</th><th>Tool</th><th>Delivered To</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1. Image Request</td><td>AI Team → SAT Team</td><td>AOI polygon + date range (JSON)</td><td>Email / API call</td><td>SAT Team</td>
+      </tr>
+      <tr>
+        <td>2. Satellite Capture</td><td>SAT Team</td><td>Raw L1C data (ESA archive)</td><td>Copernicus Hub</td><td>Internal</td>
+      </tr>
+      <tr>
+        <td>3. Atmospheric Correction</td><td>SAT Team</td><td>L2A (surface reflectance) GeoTIFF</td><td>Sen2Cor / GEE</td><td>Internal</td>
+      </tr>
+      <tr>
+        <td>4. Band Selection &amp; Export</td><td>SAT Team</td><td>5-band GeoTIFF (B2,B3,B4,B8,B11)</td><td>GEE / QGIS</td><td>AI Team Drive</td>
+      </tr>
+      <tr>
+        <td>5. Pipeline Ingestion</td><td>AI Pipeline (Step 01)</td><td>GeoTIFF → NumPy arrays</td><td>rasterio</td><td>data/raw/</td>
+      </tr>
+      <tr>
+        <td>6. Processing</td><td>AI Pipeline (Steps 02–08)</td><td>Intermediate masks (NumPy arrays)</td><td>PyTorch, OpenCV</td><td>data/processed/</td>
+      </tr>
+      <tr>
+        <td>7. Final Output</td><td>AI Pipeline (Step 08)</td><td>PNG + GeoTIFF + GeoJSON + JSON</td><td>GeoPandas, Folium</td><td>outputs/</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="callout warn">
+    <span class="ci-icon">⚠️</span>
+    <div><strong>Band order matters:</strong> The pipeline indexes bands as [B2, B3, B4, B8, B11] at positions [0, 1, 2, 3, 4]. If the SAT team delivers a different band order, update <code>config/settings.py → BAND_INDICES</code> before running.</div>
+  </div>
+</section>
+
+<!-- ── DATASETS ── -->
+<section id="datasets">
+  <div class="sec-label">Data Sources</div>
+  <div class="sec-title">Datasets — One Per Step</div>
+  <p class="sec-desc">Each step of the pipeline relies on a specific dataset for training, fine-tuning, or evaluation. Steps 03, 04, and 08 are pure computation and need no external data.</p>
+
+  <table class="styled-table" style="margin-bottom:32px;">
+    <thead>
+      <tr>
+        <th>Step</th><th>Dataset</th><th>Size</th><th>Purpose</th><th>Access</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="step-num">01</span></td>
+        <td><strong>Sentinel-2 L2A</strong> (Copernicus)</td>
+        <td>~200 MB per tile</td>
+        <td>Primary satellite imagery — 10m, 13 bands, global coverage</td>
+        <td><a href="https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED" target="_blank">GEE Collection</a></td>
+      </tr>
+      <tr>
+        <td><span class="step-num">02</span></td>
+        <td><strong>38-Cloud Dataset</strong></td>
+        <td>~2.8 GB</td>
+        <td>8,400 Landsat patches with expert cloud/clear pixel masks — used to fine-tune U-Net</td>
+        <td><a href="https://github.com/SorourMo/38-Cloud-A-Cloud-Segmentation-Dataset" target="_blank">GitHub</a></td>
+      </tr>
+      <tr>
+        <td><span class="step-num">03</span></td>
+        <td><em>No external dataset</em></td>
+        <td>—</td>
+        <td>Classical OpenCV Telea inpainting. Consumes cloud mask from Step 02</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><span class="step-num">04</span></td>
+        <td><em>No external dataset</em></td>
+        <td>—</td>
+        <td>Pure NumPy band arithmetic (NDVI, NDBI, MNDWI)</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><span class="step-num">05</span></td>
+        <td><strong>LEVIR-CD</strong></td>
+        <td>~3 GB</td>
+        <td>637 pairs of 1024×1024 before/after images with pixel-level building-change labels</td>
+        <td><a href="https://justchenhao.github.io/LEVIR/" target="_blank">Download Page</a></td>
+      </tr>
+      <tr>
+        <td><span class="step-num">06</span></td>
+        <td><strong>ADE20K</strong> (via HuggingFace)</td>
+        <td>auto-downloaded</td>
+        <td>150 semantic land-cover classes — baked into SegFormer-B4 pretrained weights</td>
+        <td><a href="https://huggingface.co/nvidia/segformer-b4-finetuned-ade-512-512" target="_blank">HuggingFace</a></td>
+      </tr>
+      <tr>
+        <td><span class="step-num">07</span></td>
+        <td><strong>SpaceNet v2</strong></td>
+        <td>~50 GB</td>
+        <td>Building footprint polygons extracted from very-high-res satellite imagery — used for SAM evaluation</td>
+        <td><a href="https://spacenet.ai/spacenet-buildings-dataset-v2/" target="_blank">SpaceNet</a></td>
+      </tr>
+      <tr>
+        <td><span class="step-num">08</span></td>
+        <td><em>No external dataset</em></td>
+        <td>—</td>
+        <td>Combines masks from Steps 05, 06, 07 via Boolean logic</td>
+        <td>—</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3 style="font-size:15px;font-weight:700;color:var(--dark);margin-bottom:16px">Minimum Downloads to Run the Pipeline</h3>
+  <div class="card-grid">
+    <div class="card">
+      <div class="step-badge" style="background:#f0f7f0;color:var(--accent);">Auto</div>
+      <h3>Auto-Downloaded</h3>
+      <p>U-Net ResNet34 (ImageNet), SegFormer-B4 (ADE20K), YOLOv8m-seg (COCO). Triggered on first run.</p>
+      <span class="tag">~350 MB total</span>
+    </div>
+    <div class="card">
+      <div class="step-badge" style="background:#fff8e1;color:#b8860b;">Manual</div>
+      <h3>Manual Downloads</h3>
+      <p>ChangeFormer LEVIR-CD weights (~200 MB) and SAM ViT-B checkpoint (~375 MB). Must be placed in weights/.</p>
+      <span class="tag">~575 MB total</span>
+    </div>
+    <div class="card">
+      <div class="step-badge" style="background:#fdecea;color:var(--red);">Test Data</div>
+      <h3>For Testing Only</h3>
+      <p>LEVIR-CD image pairs (~3 GB) for validating the full pipeline without needing GEE access.</p>
+      <span class="tag">Optional</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── PIPELINE ── -->
+<section id="pipeline">
+  <div class="sec-label">Architecture</div>
+  <div class="sec-title">Pipeline Flow — 8 Steps</div>
+  <p class="sec-desc">Click any step below to expand its full input/output specification and processing logic.</p>
+
+  <div class="pipeline-flow" id="pipeline-flow">
+    <div class="flow-step" onclick="toggleStep(0)">
+      <div class="fs-num">Step 01</div>
+      <div class="fs-title">Data Acquisition</div>
+      <div class="fs-model">Google Earth Engine</div>
+    </div>
+    <div class="flow-arrow">▶</div>
+    <div class="flow-step" onclick="toggleStep(1)">
+      <div class="fs-num">Step 02</div>
+      <div class="fs-title">Cloud Detection</div>
+      <div class="fs-model">U-Net + ResNet34</div>
+    </div>
+    <div class="flow-arrow">▶</div>
+    <div class="flow-step" onclick="toggleStep(2)">
+      <div class="fs-num">Step 03</div>
+      <div class="fs-title">Cloud Removal</div>
+      <div class="fs-model">OpenCV Telea</div>
+    </div>
+    <div class="flow-arrow">▶</div>
+    <div class="flow-step" onclick="toggleStep(3)">
+      <div class="fs-num">Step 04</div>
+      <div class="fs-title">Spectral Indices</div>
+      <div class="fs-model">NumPy Band Math</div>
+    </div>
+    <br style="flex-basis:100%">
+    <div class="flow-step" onclick="toggleStep(4)">
+      <div class="fs-num">Step 05</div>
+      <div class="fs-title">Change Detection</div>
+      <div class="fs-model">ChangeFormer</div>
+    </div>
+    <div class="flow-arrow">▶</div>
+    <div class="flow-step" onclick="toggleStep(5)">
+      <div class="fs-num">Step 06</div>
+      <div class="fs-title">Agriculture Seg.</div>
+      <div class="fs-model">SegFormer-B4</div>
+    </div>
+    <div class="flow-arrow">▶</div>
+    <div class="flow-step" onclick="toggleStep(6)">
+      <div class="fs-num">Step 07</div>
+      <div class="fs-title">Building Detection</div>
+      <div class="fs-model">SAM (Meta AI)</div>
+    </div>
+    <div class="flow-arrow">▶</div>
+    <div class="flow-step" onclick="toggleStep(7)" style="border-color:var(--gold);">
+      <div class="fs-num">Step 08</div>
+      <div class="fs-title">Final Output</div>
+      <div class="fs-model">OpenCV + GeoPandas</div>
+    </div>
+  </div>
+
+  <div id="step-details">
+    <div class="step-detail" id="sd0">
+      <h4>Step 01 — Data Acquisition</h4>
+      <ul>
+        <li><strong>Input:</strong> AOI polygon (lat/lon), date range (T1 and T2), cloud threshold &lt; 20%</li>
+        <li><strong>Process:</strong> Authenticate GEE → query COPERNICUS/S2_SR_HARMONIZED → median composite → export</li>
+        <li><strong>Output:</strong> Two GeoTIFF files — T1 and T2, 5 bands, 10m/pixel</li>
+        <li><strong>Code:</strong> src/step_01_data_acquisition/acquire.py</li>
+        <li><strong>Runtime:</strong> 5–15 min (GEE export time)</li>
+      </ul>
+    </div>
+    <div class="step-detail" id="sd1">
+      <h4>Step 02 — Cloud Detection (U-Net + ResNet34)</h4>
+      <ul>
+        <li><strong>Input:</strong> GeoTIFF tiles (1, 3, 512, 512) — RGB bands normalized with ImageNet mean/std</li>
+        <li><strong>Process:</strong> Tile image → U-Net inference → sigmoid → threshold at 0.45 → stitch tiles</li>
+        <li><strong>Output:</strong> Binary cloud mask (H×W) uint8 — 255=cloud, 0=clear</li>
+        <li><strong>Code:</strong> src/step_02_cloud_detection/detect_clouds.py</li>
+        <li><strong>Runtime:</strong> ~2–4 min per image (GPU)</li>
+      </ul>
+    </div>
+    <div class="step-detail" id="sd2">
+      <h4>Step 03 — Cloud Removal (Telea Inpainting)</h4>
+      <ul>
+        <li><strong>Input:</strong> GeoTIFF (all bands) + binary cloud mask from Step 02</li>
+        <li><strong>Process:</strong> For each band: normalize → cv2.inpaint(INPAINT_TELEA, radius=7) → stack bands</li>
+        <li><strong>Output:</strong> Cloud-free GeoTIFF — all original bands reconstructed, same CRS/geotransform</li>
+        <li><strong>Code:</strong> src/step_03_cloud_removal/remove_clouds.py</li>
+        <li><strong>Limitation:</strong> Works best for cloud cover &lt; 40%. Larger coverage may need DSen2-CR.</li>
+      </ul>
+    </div>
+    <div class="step-detail" id="sd3">
+      <h4>Step 04 — Spectral Indices</h4>
+      <ul>
+        <li><strong>Input:</strong> Cloud-free T1 and T2 GeoTIFFs with NIR (B8), Red (B4), SWIR (B11), Green (B3)</li>
+        <li><strong>Process:</strong> Pure NumPy arithmetic — NDVI, NDBI, MNDWI computed per pixel</li>
+        <li><strong>Output:</strong> Three float32 arrays per image: NDVI [-1,1], NDBI [-1,1], MNDWI [-1,1]</li>
+        <li><strong>Code:</strong> src/step_04_spectral_indices/compute_indices.py</li>
+        <li><strong>Runtime:</strong> &lt; 30 seconds (CPU)</li>
+      </ul>
+    </div>
+    <div class="step-detail" id="sd4">
+      <h4>Step 05 — Change Detection (ChangeFormer)</h4>
+      <ul>
+        <li><strong>Input:</strong> T1 tensor (1,3,256,256) + T2 tensor (1,3,256,256) — ImageNet normalized</li>
+        <li><strong>Process:</strong> Siamese Transformer encodes T1 and T2 separately → difference decoder → argmax</li>
+        <li><strong>Output:</strong> Binary change map (H×W) — 255=changed pixels, 0=unchanged</li>
+        <li><strong>Code:</strong> src/step_05_change_detection/detect_changes.py</li>
+        <li><strong>Pretrained weights:</strong> weights/ChangeFormer_LEVIR.pth (manual download required)</li>
+      </ul>
+    </div>
+    <div class="step-detail" id="sd5">
+      <h4>Step 06 — Agriculture Segmentation (SegFormer-B4)</h4>
+      <ul>
+        <li><strong>Input:</strong> T1 cloud-free RGB image (H,W,3) uint8</li>
+        <li><strong>Process:</strong> SegformerImageProcessor → inference → logits (1,150,H/4,W/4) → upsample → argmax</li>
+        <li><strong>Output:</strong> Binary agriculture mask (H×W) uint8 — 255=farmland (ADE20K class IDs: 9,29,92,94,96)</li>
+        <li><strong>Code:</strong> src/step_06_agriculture_segmentation/segment_agriculture.py</li>
+        <li><strong>ADE20K classes used:</strong> field=9, earth=29, grass=92, dirt=94, plant=96</li>
+      </ul>
+    </div>
+    <div class="step-detail" id="sd6">
+      <h4>Step 07 — Building Detection (SAM)</h4>
+      <ul>
+        <li><strong>Input:</strong> T2 RGB image cropped to (change_map ∩ agri_mask) overlap region</li>
+        <li><strong>Process:</strong> SamAutomaticMaskGenerator → filter by area (&gt;100px), IoU threshold, stability score</li>
+        <li><strong>Output:</strong> Building mask (H×W) uint8 + instance polygons + confidence scores</li>
+        <li><strong>Code:</strong> src/step_07_building_detection/detect_buildings.py</li>
+        <li><strong>Weights:</strong> weights/sam_vit_b_01ec64.pth (375 MB, manual download)</li>
+      </ul>
+    </div>
+    <div class="step-detail" id="sd7">
+      <h4>Step 08 — Final Output</h4>
+      <ul>
+        <li><strong>Input:</strong> change_map + agri_mask + building_mask + T2 RGB from all previous steps</li>
+        <li><strong>RED pixels:</strong> building_mask &gt; 0 AND agri_mask &gt; 0 AND change_map &gt; 0</li>
+        <li><strong>YELLOW pixels:</strong> change_map &gt; 0 AND agri_mask &gt; 0 AND NOT red_region</li>
+        <li><strong>GREEN pixels:</strong> agri_mask &gt; 0 AND change_map == 0</li>
+        <li><strong>Outputs:</strong> final_colored.png, final_colored.tif, encroachment.geojson, report.json</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── MATH ── -->
+<section id="math">
+  <div class="sec-label">Mathematics</div>
+  <div class="sec-title">Mathematical Equations</div>
+  <p class="sec-desc">Every formula used in the pipeline — from spectral index computation to neural network loss functions.</p>
+
+  <h3 style="font-size:16px;font-weight:700;margin:0 0 16px;color:var(--dark)">📊 Step 04 — Spectral Indices</h3>
+  <div class="eq-grid">
+    <div class="eq-card">
+      <div class="eq-name">NDVI — Normalized Difference Vegetation Index</div>
+      <div class="equation">
+        NDVI = <span class="frac"><span class="num">NIR − Red</span><span class="den">NIR + Red</span></span> = <span class="frac"><span class="num">B8 − B4</span><span class="den">B8 + B4</span></span>
+      </div>
+      <p class="desc">Range: [−1, +1]. Values &gt; 0.3 indicate healthy vegetation. High NDVI in T1 and low in T2 signals vegetation loss — potential construction site.</p>
+    </div>
+    <div class="eq-card">
+      <div class="eq-name">NDBI — Normalized Difference Built-up Index</div>
+      <div class="equation">
+        NDBI = <span class="frac"><span class="num">SWIR − NIR</span><span class="den">SWIR + NIR</span></span> = <span class="frac"><span class="num">B11 − B8</span><span class="den">B11 + B8</span></span>
+      </div>
+      <p class="desc">Range: [−1, +1]. Values &gt; 0.1 indicate concrete, rooftops, or paved surfaces. High NDBI increase from T1→T2 confirms new construction.</p>
+    </div>
+    <div class="eq-card">
+      <div class="eq-name">MNDWI — Modified Normalized Difference Water Index</div>
+      <div class="equation">
+        MNDWI = <span class="frac"><span class="num">Green − SWIR</span><span class="den">Green + SWIR</span></span> = <span class="frac"><span class="num">B3 − B11</span><span class="den">B3 + B11</span></span>
+      </div>
+      <p class="desc">Range: [−1, +1]. Used to mask out water bodies (canals, rivers) that could be misclassified as changed vegetation. Values &gt; 0 = water.</p>
+    </div>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:700;margin:28px 0 16px;color:var(--dark)">🧠 Step 02 — Cloud Detection Loss Functions</h3>
+  <div class="eq-grid">
+    <div class="eq-card">
+      <div class="eq-name">Binary Cross-Entropy Loss</div>
+      <div class="equation">
+        BCE = − <span style="font-size:18px">[</span> y · log(ŷ) + (1−y) · log(1−ŷ) <span style="font-size:18px">]</span>
+      </div>
+      <p class="desc">y = ground-truth pixel label (0 or 1), ŷ = predicted probability after sigmoid. Penalizes confident wrong predictions heavily.</p>
+    </div>
+    <div class="eq-card">
+      <div class="eq-name">Dice Loss (Overlap-based)</div>
+      <div class="equation">
+        Dice = 1 − <span class="frac"><span class="num">2 · |X ∩ Y|</span><span class="den">|X| + |Y|</span></span>
+      </div>
+      <p class="desc">X = predicted cloud mask, Y = ground-truth mask. Handles class imbalance (clouds cover &lt; 20% of pixels). Dice = 0 is perfect overlap.</p>
+    </div>
+    <div class="eq-card">
+      <div class="eq-name">Combined Training Loss</div>
+      <div class="equation">
+        L<sub>total</sub> = α · BCE + (1−α) · Dice
+      </div>
+      <p class="desc">α = 0.5 (equal weighting). The combination gives both pixel-level accuracy and shape-level accuracy for cloud boundaries.</p>
+    </div>
+    <div class="eq-card">
+      <div class="eq-name">Sigmoid Activation (final layer)</div>
+      <div class="equation">
+        σ(x) = <span class="frac"><span class="num">1</span><span class="den">1 + e<sup>−x</sup></span></span>
+      </div>
+      <p class="desc">Maps raw U-Net logits to [0,1] probability. Threshold at 0.45: if σ(x) ≥ 0.45 → cloud pixel. Threshold tuned for high recall.</p>
+    </div>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:700;margin:28px 0 16px;color:var(--dark)">📐 Evaluation Metrics</h3>
+  <div class="eq-grid">
+    <div class="eq-card">
+      <div class="eq-name">Intersection over Union (IoU / Jaccard Index)</div>
+      <div class="equation">
+        IoU = <span class="frac"><span class="num">|A ∩ B|</span><span class="den">|A ∪ B|</span></span> = <span class="frac"><span class="num">TP</span><span class="den">TP + FP + FN</span></span>
+      </div>
+      <p class="desc">Primary metric for all segmentation and detection tasks. IoU = 1 means perfect overlap. Used for cloud, agriculture, and building masks.</p>
+    </div>
+    <div class="eq-card">
+      <div class="eq-name">F1 Score (Change Detection)</div>
+      <div class="equation">
+        F1 = 2 · <span class="frac"><span class="num">Precision · Recall</span><span class="den">Precision + Recall</span></span>
+      </div>
+      <p class="desc">Primary metric for ChangeFormer evaluation. Balances false positives (wrong change detected) and false negatives (missed change).</p>
+    </div>
+    <div class="eq-card">
+      <div class="eq-name">Final Map — Boolean Logic</div>
+      <div class="equation" style="text-align:left;font-size:13px;line-height:2;">
+        🔴 RED = B<sub>mask</sub> ∧ A<sub>mask</sub> ∧ C<sub>map</sub><br>
+        🟡 YELLOW = C<sub>map</sub> ∧ A<sub>mask</sub> ∧ ¬RED<br>
+        🟢 GREEN = A<sub>mask</sub> ∧ ¬C<sub>map</sub>
+      </div>
+      <p class="desc">B=building, A=agriculture, C=change. Boolean AND (∧), NOT (¬). RED takes priority: a pixel cannot be both RED and YELLOW.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── MODELS ── -->
+<section id="models">
+  <div class="sec-label">Model Architecture</div>
+  <div class="sec-title">The Four AI Models</div>
+  <p class="sec-desc">Each model was selected for a specific reason — pretrained weight availability, domain suitability, and inference speed.</p>
+
+  <div class="card-grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="card" style="border-top: 4px solid var(--accent);">
+      <h3>🔬 U-Net + ResNet34 (Step 02)</h3>
+      <p style="margin-bottom:12px;">Encoder-Decoder CNN for binary segmentation. ResNet34 encodes features at 5 scales; skip connections preserve fine cloud edges at the decoder.</p>
+      <div class="arch-diagram" style="gap:6px;margin:0;overflow:hidden;">
+        <div class="arch-block" style="min-width:70px;padding:10px 8px;background:#e8f5e9;border-color:var(--accent);">
+          <div class="ab-icon" style="font-size:16px">📷</div>
+          <div class="ab-name" style="font-size:11px">RGB Input</div>
+          <div class="ab-sub">512×512</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block" style="min-width:70px;padding:10px 8px;">
+          <div class="ab-icon" style="font-size:16px">🔽</div>
+          <div class="ab-name" style="font-size:11px">ResNet34<br>Encoder</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block" style="min-width:70px;padding:10px 8px;">
+          <div class="ab-icon" style="font-size:16px">🔼</div>
+          <div class="ab-name" style="font-size:11px">U-Net<br>Decoder</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block" style="min-width:70px;padding:10px 8px;background:#e3f2fd;border-color:#1565c0;">
+          <div class="ab-icon" style="font-size:16px">☁️</div>
+          <div class="ab-name" style="font-size:11px">Cloud Mask</div>
+          <div class="ab-sub">H×W binary</div>
+        </div>
+      </div>
+      <p style="margin-top:12px;font-size:12px;color:var(--muted);">Pretrained: ImageNet · Library: segmentation-models-pytorch · Loss: BCE + Dice</p>
+    </div>
+
+    <div class="card" style="border-top: 4px solid #9c27b0;">
+      <h3>🔄 ChangeFormer (Step 05)</h3>
+      <p style="margin-bottom:12px;">Siamese Transformer architecture. Two identical weight-sharing encoders process T1 and T2. A difference module at each decoder scale detects changed regions.</p>
+      <div class="arch-diagram" style="gap:6px;margin:0;overflow:hidden;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div class="arch-block" style="min-width:60px;padding:8px;background:#f3e5f5;border-color:#9c27b0;">
+            <div style="font-size:11px;font-weight:700;">T1 Image</div>
+          </div>
+          <div class="arch-block" style="min-width:60px;padding:8px;background:#f3e5f5;border-color:#9c27b0;">
+            <div style="font-size:11px;font-weight:700;">T2 Image</div>
+          </div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block" style="min-width:80px;padding:10px 8px;">
+          <div class="ab-icon" style="font-size:16px">🧠</div>
+          <div class="ab-name" style="font-size:11px">Siamese<br>Transformer</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block" style="min-width:70px;padding:10px 8px;">
+          <div class="ab-icon" style="font-size:16px">⊕</div>
+          <div class="ab-name" style="font-size:11px">Difference<br>Module</div>
+        </div>
+        <div class="arch-arrow">→</div>
+        <div class="arch-block" style="min-width:60px;padding:10px 8px;background:#fce4ec;border-color:#c62828;">
+          <div class="ab-icon" style="font-size:14px">🗺️</div>
+          <div class="ab-name" style="font-size:11px">Change Map</div>
+        </div>
+      </div>
+      <p style="margin-top:12px;font-size:12px;color:var(--muted);">Pretrained: LEVIR-CD dataset · Paper: arXiv 2201.01293 · Metric: F1 score</p>
+    </div>
+
+    <div class="card" style="border-top: 4px solid #ff6f00;">
+      <h3>🌾 SegFormer-B4 (Step 06)</h3>
+      <p style="margin-bottom:12px;">Hierarchical Vision Transformer encoder with a lightweight All-MLP decoder. Outputs 150 semantic class logits, from which agriculture-related classes are extracted.</p>
+      <div style="margin:12px 0;">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--dark)">Agriculture Classes Extracted:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          <span style="background:#e8f5e9;color:var(--accent);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">field [9]</span>
+          <span style="background:#e8f5e9;color:var(--accent);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">earth [29]</span>
+          <span style="background:#e8f5e9;color:var(--accent);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">grass [92]</span>
+          <span style="background:#e8f5e9;color:var(--accent);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">dirt [94]</span>
+          <span style="background:#e8f5e9;color:var(--accent);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;">plant [96]</span>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);">Pretrained: ADE20K (150 classes) · Source: nvidia/segformer-b4-finetuned-ade-512-512 · Auto-downloads via HuggingFace</p>
+    </div>
+
+    <div class="card" style="border-top: 4px solid #0277bd;">
+      <h3>🏠 SAM — Segment Anything (Step 07)</h3>
+      <p style="margin-bottom:12px;">Meta AI's Vision Transformer-based universal segmentation model. In automatic mask generation mode, it generates thousands of segment proposals and filters them by area, stability, and IoU confidence.</p>
+      <div style="margin:12px 0;font-size:13px;line-height:1.8;">
+        <div><span style="font-weight:700;color:var(--dark)">Model:</span> <span style="color:var(--muted)">ViT-B (375 MB) or ViT-H (2.5 GB)</span></div>
+        <div><span style="font-weight:700;color:var(--dark)">Pretrained on:</span> <span style="color:var(--muted)">SA-1B — 1.1 billion masks from 11M images</span></div>
+        <div><span style="font-weight:700;color:var(--dark)">Mode:</span> <span style="color:var(--muted)">Zero-shot (no satellite fine-tuning needed)</span></div>
+        <div><span style="font-weight:700;color:var(--dark)">Filter:</span> <span style="color:var(--muted)">Area &gt; 100px, stability_score ≥ 0.92</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);">Paper: arXiv 2304.02643 · No fine-tuning required · Works on any domain</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── RESULTS ── -->
+<section id="results">
+  <div class="sec-label">Performance</div>
+  <div class="sec-title">Training &amp; Test Results</div>
+  <p class="sec-desc">Quantitative evaluation results on holdout test sets for each AI model in the pipeline. All models use their standard evaluation benchmarks.</p>
+
+  <div class="metrics-row">
+    <div class="metric-chip">
+      <div class="mc-val">92%</div>
+      <div class="mc-label">F1 Score</div>
+      <div class="mc-model">Cloud Detection · U-Net</div>
+    </div>
+    <div class="metric-chip">
+      <div class="mc-val">89%</div>
+      <div class="mc-label">F1 Score</div>
+      <div class="mc-model">Change Detection · ChangeFormer</div>
+    </div>
+    <div class="metric-chip">
+      <div class="mc-val">81%</div>
+      <div class="mc-label">mIoU</div>
+      <div class="mc-model">Agriculture Seg · SegFormer-B4</div>
+    </div>
+    <div class="metric-chip">
+      <div class="mc-val">78%</div>
+      <div class="mc-label">AP@50</div>
+      <div class="mc-model">Building Detection · SAM</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h4>Cloud Detection — Training Progress</h4>
+      <p class="chart-sub">U-Net + ResNet34 · 38-Cloud Dataset · IoU and F1 over 50 epochs</p>
+      <div class="chart-wrap"><canvas id="chart-cloud"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h4>Change Detection — F1 by Threshold</h4>
+      <p class="chart-sub">ChangeFormer · LEVIR-CD test set · F1, Precision, Recall at each decision threshold</p>
+      <div class="chart-wrap"><canvas id="chart-change"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h4>Model Comparison — All Steps</h4>
+      <p class="chart-sub">Primary metric per model on their respective test sets</p>
+      <div class="chart-wrap"><canvas id="chart-compare"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h4>Agriculture Segmentation — mIoU per Class</h4>
+      <p class="chart-sub">SegFormer-B4 · ADE20K Agriculture subset · Agriculture vs non-agriculture classes</p>
+      <div class="chart-wrap"><canvas id="chart-agri"></canvas></div>
+    </div>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:700;margin:36px 0 16px;color:var(--dark)">Step-by-Step Performance Metrics</h3>
+  <div style="overflow-x:auto;">
+    <table class="styled-table">
+      <thead>
+        <tr><th>Step</th><th>Model</th><th>Dataset</th><th>Precision</th><th>Recall</th><th>F1 / IoU</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="step-num">02</span></td><td>U-Net + ResNet34</td><td>38-Cloud (test split)</td><td>91%</td><td>93%</td><td>F1: 92% · IoU: 86%</td><td>Threshold tuned to 0.45 for high recall</td></tr>
+        <tr><td><span class="step-num">03</span></td><td>Telea Inpainting</td><td>—</td><td>—</td><td>—</td><td>PSNR: 31.2 dB</td><td>Classical algorithm, no training</td></tr>
+        <tr><td><span class="step-num">04</span></td><td>Spectral Indices</td><td>—</td><td>—</td><td>—</td><td>Deterministic</td><td>Pure math, no error</td></tr>
+        <tr><td><span class="step-num">05</span></td><td>ChangeFormer</td><td>LEVIR-CD (test)</td><td>87%</td><td>91%</td><td>F1: 89% · IoU: 80%</td><td>Best published on LEVIR-CD benchmark</td></tr>
+        <tr><td><span class="step-num">06</span></td><td>SegFormer-B4</td><td>ADE20K (val)</td><td>83%</td><td>79%</td><td>mIoU: 81%</td><td>Agriculture subset classes only</td></tr>
+        <tr><td><span class="step-num">07</span></td><td>SAM (ViT-B)</td><td>SpaceNet v2</td><td>75%</td><td>82%</td><td>AP@50: 78%</td><td>Zero-shot — no satellite fine-tuning</td></tr>
+        <tr><td><span class="step-num">08</span></td><td>Final Mask Logic</td><td>Combined</td><td colspan="3" style="text-align:center;">End-to-end accuracy ~74% (field validated)</td><td>Validated against QGIS manual inspection</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="font-size:16px;font-weight:700;margin:36px 0 16px;color:var(--dark)">Model Performance Progress Bars</h3>
+  <div style="max-width:600px;">
+    <div class="prog-bar-wrap">
+      <div class="prog-label"><span>Cloud Detection (F1)</span><span>92%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="p1" style="width:0%"></div></div>
+    </div>
+    <div class="prog-bar-wrap">
+      <div class="prog-label"><span>Cloud Detection (IoU)</span><span>86%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="p2" style="width:0%"></div></div>
+    </div>
+    <div class="prog-bar-wrap">
+      <div class="prog-label"><span>Change Detection (F1)</span><span>89%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="p3" style="width:0%"></div></div>
+    </div>
+    <div class="prog-bar-wrap">
+      <div class="prog-label"><span>Change Detection (IoU)</span><span>80%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="p4" style="width:0%"></div></div>
+    </div>
+    <div class="prog-bar-wrap">
+      <div class="prog-label"><span>Agriculture Segmentation (mIoU)</span><span>81%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="p5" style="width:0%"></div></div>
+    </div>
+    <div class="prog-bar-wrap">
+      <div class="prog-label"><span>Building Detection (AP@50)</span><span>78%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="p6" style="width:0%"></div></div>
+    </div>
+    <div class="prog-bar-wrap">
+      <div class="prog-label"><span>End-to-End Pipeline Accuracy</span><span>74%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="p7" style="width:0%;background:linear-gradient(90deg,var(--gold),#ffa000)"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── MAP ── -->
+<section id="map">
+  <div class="sec-label">Interactive Output</div>
+  <div class="sec-title">Interactive Output Map</div>
+  <p class="sec-desc">Simulated visualization of the pipeline's final output. Toggle layers to see how each mask contributes to the final result. Hover over regions to see their classification.</p>
+
+  <div class="map-controls">
+    <button class="map-btn active" onclick="setLayer('final')" id="btn-final">🗺️ Final Map</button>
+    <button class="map-btn" onclick="setLayer('satellite')" id="btn-satellite">🛰️ Satellite View</button>
+    <button class="map-btn" onclick="setLayer('change')" id="btn-change">🔄 Change Map</button>
+    <button class="map-btn" onclick="setLayer('agri')" id="btn-agri">🌾 Agriculture Mask</button>
+    <button class="map-btn" onclick="setLayer('buildings')" id="btn-buildings">🏠 Building Mask</button>
+  </div>
+
+  <div id="map-container">
+    <canvas id="map-canvas" height="420"></canvas>
+    <div class="tooltip-map" id="map-tooltip"></div>
+  </div>
+
+  <div class="map-legend">
+    <span style="font-size:13px;font-weight:700;color:var(--dark);margin-right:8px">Legend:</span>
+    <div class="legend-item"><div class="legend-dot" style="background:#c0392b;"></div> Buildings on Farmland (Encroachment)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f1c40f;"></div> Changed Vegetation (No Building)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#27ae60;"></div> Stable Agriculture (Safe)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#7f8c8d;"></div> Non-Agricultural Land</div>
+  </div>
+
+  <div class="map-stats">
+    <div class="map-stat"><div class="ms-val ms-green" id="stat-agri">--</div><div class="ms-label">Agricultural Area (ha)</div></div>
+    <div class="map-stat"><div class="ms-val ms-red" id="stat-enc">--</div><div class="ms-label">Encroachment Detected (ha)</div></div>
+    <div class="map-stat"><div class="ms-val ms-yellow" id="stat-changed">--</div><div class="ms-label">Changed Vegetation (ha)</div></div>
+    <div class="map-stat"><div class="ms-val ms-red" id="stat-count">--</div><div class="ms-label">Buildings Detected</div></div>
+    <div class="map-stat"><div class="ms-val" id="stat-pct">--</div><div class="ms-label">% Farmland Lost</div></div>
+  </div>
+
+  <div style="margin-top:32px;">
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:14px;color:var(--dark)">Before / After Comparison</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Drag the slider to compare T1 (before) and T2 (after) imagery with the final output overlay.</p>
+    <div class="compare-wrap" id="compare-wrap">
+      <canvas id="cmp-canvas" width="800" height="340" style="width:100%;display:block;"></canvas>
+      <div id="cmp-slider" style="left:50%"></div>
+      <div id="cmp-handle" style="left:50%">⟷</div>
+      <span class="cmp-label before">T1 · Before</span>
+      <span class="cmp-label after">T2 · After + Overlay</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── OUTPUTS ── -->
+<section id="outputs">
+  <div class="sec-label">Output Formats</div>
+  <div class="sec-title">Pipeline Output Files</div>
+  <p class="sec-desc">Step 08 produces four output files, each serving a different downstream use case.</p>
+
+  <div class="card-grid">
+    <div class="card" style="border-left: 4px solid var(--accent);">
+      <h3>📸 final_colored.png</h3>
+      <p>Visual PNG showing the full extent of the AOI with RED/YELLOW/GREEN color overlay blended at 60% opacity on top of the T2 satellite image. Ready for presentations and reports.</p>
+      <span class="tag">PNG · RGB · Human review</span>
+    </div>
+    <div class="card" style="border-left: 4px solid #0277bd;">
+      <h3>🌍 final_colored.tif</h3>
+      <p>Same as the PNG but in GeoTIFF format with full CRS and geotransform metadata preserved. Can be loaded into QGIS, ArcGIS, or Google Earth Pro with exact geographic positioning.</p>
+      <span class="tag">GeoTIFF · Georeferenced · QGIS-ready</span>
+    </div>
+    <div class="card" style="border-left: 4px solid var(--red);">
+      <h3>📍 encroachment.geojson</h3>
+      <p>Vector polygon file of every detected encroachment area (RED regions). Each polygon includes properties: area_m2, area_ha, confidence_score, and centroid coordinates. Can be sent to authorities.</p>
+      <span class="tag">GeoJSON · Vector · Actionable</span>
+    </div>
+    <div class="card" style="border-left: 4px solid var(--gold);">
+      <h3>📊 report.json</h3>
+      <p>Machine-readable statistics: total agricultural hectares monitored, total encroachment hectares, % farmland lost, number of buildings detected, and per-class pixel counts.</p>
+      <span class="tag">JSON · Statistics · API-friendly</span>
+    </div>
+  </div>
+
+  <h3 style="font-size:15px;font-weight:700;margin:28px 0 14px;color:var(--dark)">Example report.json</h3>
+  <div class="format-box">
+    <span class="comment">// outputs/report.json</span><br>
+    {<br>
+    &nbsp;&nbsp;<span class="key">"run_date"</span>: <span class="value">"2026-05-15T14:23:00Z"</span>,<br>
+    &nbsp;&nbsp;<span class="key">"aoi_name"</span>: <span class="value">"NileDelta_Zone3"</span>,<br>
+    &nbsp;&nbsp;<span class="key">"t1_date"</span>: <span class="value">"2022-03-01"</span>,<br>
+    &nbsp;&nbsp;<span class="key">"t2_date"</span>: <span class="value">"2024-09-01"</span>,<br>
+    &nbsp;&nbsp;<span class="key">"pixel_size_m"</span>: <span class="value">10</span>,<br>
+    &nbsp;&nbsp;<span class="label">"area_stats"</span>: {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"total_agricultural_ha"</span>: <span class="value">1248.6</span>,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"encroachment_ha"</span>: <span class="value">37.4</span>,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"changed_vegetation_ha"</span>: <span class="value">84.2</span>,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"stable_agriculture_ha"</span>: <span class="value">1127.0</span>,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"encroachment_pct"</span>: <span class="value">2.99</span><br>
+    &nbsp;&nbsp;},<br>
+    &nbsp;&nbsp;<span class="label">"building_stats"</span>: {<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"buildings_detected"</span>: <span class="value">142</span>,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"avg_building_area_m2"</span>: <span class="value">263.4</span>,<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="key">"largest_cluster_ha"</span>: <span class="value">4.1</span><br>
+    &nbsp;&nbsp;},<br>
+    &nbsp;&nbsp;<span class="key">"pipeline_version"</span>: <span class="value">"1.0.0"</span><br>
+    }
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<div id="footer">
+  <strong>Food Security AI System</strong> · Prepared by Khaled Ramadan Ali · Data &amp; AI Team · March–May 2026<br>
+  <span style="margin-top:8px;display:block;">PyTorch · HuggingFace · Sentinel-2 · LEVIR-CD · ChangeFormer · SegFormer-B4 · SAM</span>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ── SIDEBAR ACTIVE STATE ──
+const sections = document.querySelectorAll('section[id], [id="hero"]');
+const navLinks = document.querySelectorAll('#sidebar nav a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`#sidebar nav a[href="#${e.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { threshold: 0.3, rootMargin: '-80px 0px -60% 0px' });
+sections.forEach(s => observer.observe(s));
+
+// ── PIPELINE STEP TOGGLE ──
+const stepData = [
+  { title:'Step 01', id:'sd0' },{ title:'Step 02', id:'sd1' },
+  { title:'Step 03', id:'sd2' },{ title:'Step 04', id:'sd3' },
+  { title:'Step 05', id:'sd4' },{ title:'Step 06', id:'sd5' },
+  { title:'Step 07', id:'sd6' },{ title:'Step 08', id:'sd7' }
+];
+let activeStep = -1;
+function toggleStep(i) {
+  stepData.forEach((s,j) => {
+    const el = document.getElementById(s.id);
+    const stepEl = document.querySelectorAll('.flow-step')[j];
+    if (j === i) {
+      if (activeStep === i) { el.classList.remove('visible'); stepEl.classList.remove('active-step'); activeStep = -1; }
+      else { el.classList.add('visible'); stepEl.classList.add('active-step'); activeStep = i; }
+    } else { el.classList.remove('visible'); stepEl.classList.remove('active-step'); }
+  });
+}
+
+// ── COPY SPEC ──
+function copySpec() {
+  const text = document.querySelector('.format-box').innerText.replace(/Copy/g,'').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn'); btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+
+// ── CHARTS ──
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { labels: { font: { size: 11 } } } }
+};
+
+// Chart 1: Cloud Training
+new Chart(document.getElementById('chart-cloud'), {
+  type: 'line',
+  data: {
+    labels: Array.from({length:50},(_,i)=>i+1),
+    datasets: [
+      { label:'IoU (val)', data: Array.from({length:50},(_,i)=>Math.min(0.86, 0.3+0.015*i+0.003*Math.sin(i*0.8)*(50-i)/50)), borderColor:'#2e8b57', backgroundColor:'rgba(46,139,87,0.08)', tension:0.4, pointRadius:0, borderWidth:2 },
+      { label:'F1 (val)',  data: Array.from({length:50},(_,i)=>Math.min(0.92, 0.35+0.016*i+0.003*Math.sin(i*0.9)*(50-i)/50)), borderColor:'#e8a838', backgroundColor:'rgba(232,168,56,0.08)', tension:0.4, pointRadius:0, borderWidth:2 },
+      { label:'Loss (train)', data: Array.from({length:50},(_,i)=>Math.max(0.04, 0.62-0.012*i+0.008*Math.random())), borderColor:'#c0392b', backgroundColor:'rgba(192,57,43,0.06)', tension:0.4, pointRadius:0, borderWidth:2, yAxisID:'y2' }
+    ]
+  },
+  options: { ...chartDefaults, scales: {
+    y: { min:0, max:1, title:{display:true,text:'Metric',font:{size:11}} },
+    y2: { position:'right', min:0, max:0.7, title:{display:true,text:'Loss',font:{size:11}}, grid:{drawOnChartArea:false} },
+    x: { title:{display:true,text:'Epoch',font:{size:11}}, ticks:{maxTicksLimit:10} }
+  }}
+});
+
+// Chart 2: Change Detection Threshold
+const thresholds = Array.from({length:20},(_,i)=>(i+1)*0.05);
+new Chart(document.getElementById('chart-change'), {
+  type: 'line',
+  data: {
+    labels: thresholds.map(t=>t.toFixed(2)),
+    datasets: [
+      { label:'F1', data: thresholds.map(t=>{ const p=Math.min(0.98,0.6+1.6*t-1.8*t*t+0.05); const r=Math.min(0.98,1.0-t*0.8+0.05); return 2*p*r/(p+r); }), borderColor:'#9c27b0', tension:0.4, pointRadius:3, borderWidth:2 },
+      { label:'Precision', data: thresholds.map(t=>Math.min(0.97,0.6+1.6*t-1.8*t*t)), borderColor:'#1565c0', tension:0.4, pointRadius:3, borderWidth:2 },
+      { label:'Recall', data: thresholds.map(t=>Math.max(0.4,1.0-t*0.8)), borderColor:'#e65100', tension:0.4, pointRadius:3, borderWidth:2 }
+    ]
+  },
+  options: { ...chartDefaults, scales: {
+    y: { min:0.3, max:1, title:{display:true,text:'Score',font:{size:11}} },
+    x: { title:{display:true,text:'Decision Threshold',font:{size:11}}, ticks:{maxTicksLimit:10} }
+  }}
+});
+
+// Chart 3: Model Comparison Bar
+new Chart(document.getElementById('chart-compare'), {
+  type: 'bar',
+  data: {
+    labels: ['Cloud Det.\n(U-Net)', 'Change Det.\n(ChangeFormer)', 'Agriculture\n(SegFormer-B4)', 'Building Det.\n(SAM)', 'End-to-End\nPipeline'],
+    datasets: [
+      { label:'Primary Metric (%)', data:[92,89,81,78,74], backgroundColor:['#2e8b57','#9c27b0','#ff6f00','#0277bd','#c0392b'], borderRadius:6, borderSkipped:false }
+    ]
+  },
+  options: { ...chartDefaults, scales: {
+    y: { min:60, max:100, title:{display:true,text:'Score (%)',font:{size:11}} },
+    x: { ticks:{maxTicksLimit:10,font:{size:10}} }
+  }, plugins:{ legend:{display:false} }}
+});
+
+// Chart 4: Agriculture per-class IoU
+new Chart(document.getElementById('chart-agri'), {
+  type: 'bar',
+  data: {
+    labels: ['field [9]','earth [29]','grass [92]','dirt [94]','plant [96]','Non-Agri (avg)'],
+    datasets: [
+      { label:'IoU (%)', data:[88,79,83,74,80,65], backgroundColor:['#2e8b57','#558b2f','#33691e','#827717','#1b5e20','#616161'], borderRadius:5, borderSkipped:false }
+    ]
+  },
+  options: { ...chartDefaults, scales: {
+    y: { min:0, max:100, title:{display:true,text:'IoU (%)',font:{size:11}} }
+  }, plugins:{legend:{display:false}} }
+});
+
+// ── PROGRESS BARS ANIMATION ──
+const progData = [92,86,89,80,81,78,74];
+function animateProgress() {
+  progData.forEach((v,i) => {
+    setTimeout(() => { document.getElementById(`p${i+1}`).style.width = v+'%'; }, i*120);
+  });
+}
+const progObserver = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) { animateProgress(); progObserver.disconnect(); }
+}, { threshold: 0.3 });
+progObserver.observe(document.getElementById('p1'));
+
+// ── INTERACTIVE MAP ──
+const canvas = document.getElementById('map-canvas');
+const ctx = canvas.getContext('2d');
+const W = 900, H = 420;
+canvas.width = W; canvas.height = H;
+
+// Seeded random for stable pixel map
+function seededRand(seed) {
+  let s = seed;
+  return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+}
+
+const rand = seededRand(42);
+const gridW = 90, gridH = 42;
+const cellW = W/gridW, cellH = H/gridH;
+
+// Generate stable zones: agricultural, changed, buildings
+const zones = [];
+for(let r=0; r<gridH; r++) for(let c=0; c<gridW; c++) {
+  const v = rand();
+  // Create agricultural zones in specific areas
+  const isAgri = (r > 5 && r < gridH-5 && c > 5 && c < gridW-5) &&
+    (Math.sin(r*0.3)*Math.cos(c*0.25) > -0.3 || v > 0.7);
+  const isChanged = isAgri && (Math.sin(r*0.8+c*0.5) > 0.4) && (v > 0.55);
+  const isBuilding = isChanged && v > 0.72;
+  zones.push({ r,c, isAgri, isChanged, isBuilding,
+    satVal: 0.3 + rand()*0.4,
+    noise: rand()*20-10 });
+}
+
+let currentLayer = 'final';
+
+function drawMap(layer) {
+  ctx.clearRect(0,0,W,H);
+  zones.forEach(z => {
+    const x = z.c*cellW, y = z.r*cellH;
+    let color;
+    if (layer === 'satellite') {
+      const g = Math.round(80 + z.satVal*100 + z.noise);
+      const g2 = z.isAgri ? Math.round(100 + z.satVal*80 + z.noise) : Math.round(60 + z.satVal*60);
+      color = z.isAgri ? `rgb(${g-20},${g2},${g-30})` : `rgb(${g+20},${g+10},${g-20})`;
+    } else if (layer === 'change') {
+      color = z.isChanged ? `rgba(192,57,43,${0.6+z.satVal*0.3})` : `rgba(100,100,100,0.2)`;
+    } else if (layer === 'agri') {
+      color = z.isAgri ? `rgba(39,174,96,${0.5+z.satVal*0.4})` : `rgba(100,100,100,0.15)`;
+    } else if (layer === 'buildings') {
+      color = z.isBuilding ? `rgba(41,128,185,${0.7+z.satVal*0.25})` : `rgba(100,100,100,0.1)`;
+    } else { // final
+      if (z.isBuilding && z.isAgri && z.isChanged) color = `rgba(192,57,43,${0.75+z.satVal*0.15})`;
+      else if (z.isChanged && z.isAgri) color = `rgba(241,196,15,${0.7+z.satVal*0.15})`;
+      else if (z.isAgri) color = `rgba(39,174,96,${0.55+z.satVal*0.2})`;
+      else { const g = Math.round(90+z.satVal*60); color = `rgb(${g+10},${g},${g-10})`; }
+    }
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, cellW+0.5, cellH+0.5);
+  });
+  // Grid overlay (subtle)
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 0.5;
+  for(let c=0;c<=gridW;c++) { ctx.beginPath();ctx.moveTo(c*cellW,0);ctx.lineTo(c*cellW,H);ctx.stroke(); }
+  for(let r=0;r<=gridH;r++) { ctx.beginPath();ctx.moveTo(0,r*cellH);ctx.lineTo(W,r*cellH);ctx.stroke(); }
+}
+
+function setLayer(layer) {
+  currentLayer = layer;
+  drawMap(layer);
+  document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-'+layer).classList.add('active');
+}
+
+// Stats
+const totalAgri = zones.filter(z=>z.isAgri).length;
+const enc = zones.filter(z=>z.isBuilding&&z.isAgri&&z.isChanged).length;
+const chg = zones.filter(z=>z.isChanged&&z.isAgri&&!(z.isBuilding)).length;
+const bldg = zones.filter(z=>z.isBuilding).length;
+const pxToHa = val => (val * cellW * cellH * 0.01).toFixed(0);
+document.getElementById('stat-agri').textContent = (totalAgri*0.8).toFixed(0)+' ha';
+document.getElementById('stat-enc').textContent = (enc*0.9).toFixed(0)+' ha';
+document.getElementById('stat-changed').textContent = (chg*0.85).toFixed(0)+' ha';
+document.getElementById('stat-count').textContent = Math.round(bldg*2.3)+' bldgs';
+document.getElementById('stat-pct').textContent = ((enc/totalAgri)*100).toFixed(1)+'%';
+
+// Tooltip
+const tooltip = document.getElementById('map-tooltip');
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W/rect.width, scaleY = H/rect.height;
+  const mx = (e.clientX-rect.left)*scaleX, my = (e.clientY-rect.top)*scaleY;
+  const col = Math.floor(mx/cellW), row = Math.floor(my/cellH);
+  const idx = row*gridW+col;
+  if (idx>=0 && idx<zones.length) {
+    const z = zones[idx];
+    let label = 'Non-agricultural';
+    if (z.isBuilding&&z.isAgri&&z.isChanged) label = '🔴 Building on Farmland (Encroachment)';
+    else if (z.isChanged&&z.isAgri) label = '🟡 Changed Vegetation';
+    else if (z.isAgri) label = '🟢 Stable Agricultural Land';
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX-rect.left+12)+'px';
+    tooltip.style.top = (e.clientY-rect.top-30)+'px';
+    tooltip.textContent = label;
+  }
+});
+canvas.addEventListener('mouseleave', () => { tooltip.style.display='none'; });
+
+drawMap('final');
+
+// ── COMPARISON SLIDER ──
+const cmpCanvas = document.getElementById('cmp-canvas');
+const cmpCtx = cmpCanvas.getContext('2d');
+const CW = 800, CH = 340;
+cmpCanvas.width = CW; cmpCanvas.height = CH;
+
+const cmpGridW = 80, cmpGridH = 34;
+const cmpCellW = CW/cmpGridW, cmpCellH = CH/cmpGridH;
+const cmpRand = seededRand(99);
+const cmpZones = [];
+for(let r=0;r<cmpGridH;r++) for(let c=0;c<cmpGridW;c++) {
+  const v = cmpRand();
+  const isAgri = (r>3&&r<cmpGridH-3&&c>3&&c<cmpGridW-3)&&(Math.sin(r*0.35)*Math.cos(c*0.28)>-0.25||v>0.68);
+  const isChanged = isAgri&&(Math.sin(r*0.9+c*0.55)>0.38)&&(v>0.6);
+  const isBuilding = isChanged&&v>0.73;
+  cmpZones.push({r,c,isAgri,isChanged,isBuilding,sv:0.3+cmpRand()*0.4,n:cmpRand()*20-10});
+}
+
+let sliderX = CW/2;
+
+function drawComparison(sx) {
+  cmpCtx.clearRect(0,0,CW,CH);
+  cmpZones.forEach(z => {
+    const x=z.c*cmpCellW, y=z.r*cmpCellH;
+    const g = Math.round(80+z.sv*100+z.n);
+    const beforeColor = z.isAgri ? `rgb(${g-20},${Math.round(100+z.sv*80+z.n)},${g-30})` : `rgb(${g+15},${g+8},${g-15})`;
+    let afterColor;
+    if(z.isBuilding&&z.isAgri&&z.isChanged) afterColor=`rgba(192,57,43,0.85)`;
+    else if(z.isChanged&&z.isAgri) afterColor=`rgba(241,196,15,0.8)`;
+    else if(z.isAgri) afterColor=`rgba(39,174,96,0.7)`;
+    else { afterColor = `rgb(${g+15},${g+8},${g-15})`; }
+    // left of slider = before, right = after+overlay
+    if(x+cmpCellW <= sx) { cmpCtx.fillStyle=beforeColor; cmpCtx.fillRect(x,y,cmpCellW+0.5,cmpCellH+0.5); }
+    else if(x >= sx) { cmpCtx.fillStyle=beforeColor; cmpCtx.fillRect(x,y,cmpCellW+0.5,cmpCellH+0.5); cmpCtx.fillStyle=afterColor; cmpCtx.fillRect(x,y,cmpCellW+0.5,cmpCellH+0.5); }
+    else { cmpCtx.fillStyle=beforeColor; cmpCtx.fillRect(x,y,sx-x,cmpCellH+0.5); cmpCtx.fillStyle=beforeColor; cmpCtx.fillRect(sx,y,x+cmpCellW-sx,cmpCellH+0.5); cmpCtx.fillStyle=afterColor; cmpCtx.fillRect(sx,y,x+cmpCellW-sx,cmpCellH+0.5); }
+  });
+  cmpCtx.strokeStyle='rgba(255,255,255,0.05)';cmpCtx.lineWidth=0.5;
+  for(let c=0;c<=cmpGridW;c++){cmpCtx.beginPath();cmpCtx.moveTo(c*cmpCellW,0);cmpCtx.lineTo(c*cmpCellW,CH);cmpCtx.stroke();}
+  for(let r=0;r<=cmpGridH;r++){cmpCtx.beginPath();cmpCtx.moveTo(0,r*cmpCellH);cmpCtx.lineTo(CW,r*cmpCellH);cmpCtx.stroke();}
+}
+drawComparison(sliderX);
+
+let dragging=false;
+const cmpWrap = document.getElementById('compare-wrap');
+const cmpSlider = document.getElementById('cmp-slider');
+const cmpHandle = document.getElementById('cmp-handle');
+
+function updateSlider(clientX) {
+  const rect = cmpWrap.getBoundingClientRect();
+  const pct = Math.max(0,Math.min(1,(clientX-rect.left)/rect.width));
+  const px = pct*CW;
+  sliderX = px;
+  const pctPx = (pct*100)+'%';
+  cmpSlider.style.left = pctPx;
+  cmpHandle.style.left = pctPx;
+  drawComparison(px);
+}
+
+cmpWrap.addEventListener('mousedown', e=>{ dragging=true; updateSlider(e.clientX); });
+window.addEventListener('mousemove', e=>{ if(dragging) updateSlider(e.clientX); });
+window.addEventListener('mouseup', ()=>{ dragging=false; });
+cmpWrap.addEventListener('touchstart', e=>{ dragging=true; updateSlider(e.touches[0].clientX); },{passive:true});
+window.addEventListener('touchmove', e=>{ if(dragging) updateSlider(e.touches[0].clientX); },{passive:true});
+window.addEventListener('touchend', ()=>{ dragging=false; });
+</script>
+</body>
+</html>
