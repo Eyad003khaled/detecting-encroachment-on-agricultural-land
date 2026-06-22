@@ -51,8 +51,28 @@ def run(
     Both components normalised to [0,1] and averaged.
     """
     logger.info("Computing spectral indices for T1 and T2 ...")
-    t1_idx = compute_indices(t1_image)
-    t2_idx = compute_indices(t2_image)
+
+    # Align T2 to T1 shape if they differ (common with real satellite tiles)
+    if t2_image.shape[1:] != t1_image.shape[1:]:
+        h, w = t1_image.shape[1], t1_image.shape[2]
+        logger.warning(
+            f"Shape mismatch: T1={t1_image.shape[1:]} T2={t2_image.shape[1:]} — "
+            f"resampling T2 to match T1 ({h}x{w})"
+        )
+        import cv2
+        bands = []
+        for b in range(t2_image.shape[0]):
+            bands.append(cv2.resize(t2_image[b], (w, h), interpolation=cv2.INTER_LINEAR))
+        t2_image = np.stack(bands, axis=0)
+
+    if CFG.get("precomputed_indices", False):
+        # Bands are already NDVI, NDBI, MNDWI, SAVI, BSI, NDWI — use directly.
+        logger.info("  Pre-computed index bands detected → using Band 0 (NDVI) and Band 1 (NDBI) directly")
+        t1_idx = {"ndvi": t1_image[0], "ndbi": t1_image[1], "mndwi": t1_image[2]}
+        t2_idx = {"ndvi": t2_image[0], "ndbi": t2_image[1], "mndwi": t2_image[2]}
+    else:
+        t1_idx = compute_indices(t1_image)
+        t2_idx = compute_indices(t2_image)
 
     ndvi_drop = t1_idx["ndvi"] - t2_idx["ndvi"]   # positive = vegetation lost
     ndbi_rise = t2_idx["ndbi"] - t1_idx["ndbi"]   # positive = more built-up

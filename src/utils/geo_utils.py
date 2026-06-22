@@ -83,20 +83,37 @@ def get_rgb_from_multiband(image: np.ndarray, rgb_indices=(2, 1, 0)) -> np.ndarr
 # ── Coordinate helpers ───────────────────────────────────────────────────────
 
 def pixel_to_latlon(
-    row: int, col: int, transform
+    row: int, col: int, transform, crs=None
 ) -> Tuple[float, float]:
-    """Convert pixel (row, col) → (latitude, longitude) using affine transform."""
-    from rasterio.transform import xy
-    lon, lat = xy(transform, row, col)
-    return float(lat), float(lon)
+    """
+    Convert pixel (row, col) → (latitude, longitude).
+
+    When the file CRS is projected (e.g. UTM), reprojects to WGS84 first.
+    Without a CRS, assumes the transform is already in degrees.
+    """
+    from rasterio.transform import xy as _xy
+    x, y = _xy(transform, row, col)   # native CRS coords (metres for UTM)
+
+    if crs is not None:
+        from rasterio.crs import CRS as _CRS
+        from rasterio.warp import transform as _warp
+        src = crs if hasattr(crs, "is_geographic") else _CRS.from_user_input(crs)
+        if not src.is_geographic:
+            # Reproject easting/northing → lon/lat (WGS84)
+            wgs84 = _CRS.from_epsg(4326)
+            lons, lats = _warp(src, wgs84, [x], [y])
+            return float(lats[0]), float(lons[0])
+
+    # Already geographic — rasterio returns (x=lon, y=lat)
+    return float(y), float(x)
 
 
 def bbox_to_latlon(
-    row_min: int, col_min: int, row_max: int, col_max: int, transform
+    row_min: int, col_min: int, row_max: int, col_max: int, transform, crs=None
 ) -> Dict[str, float]:
-    """Return lat/lon corners of a pixel bounding box."""
-    lat1, lon1 = pixel_to_latlon(row_min, col_min, transform)
-    lat2, lon2 = pixel_to_latlon(row_max, col_max, transform)
+    """Return WGS84 lat/lon corners of a pixel bounding box."""
+    lat1, lon1 = pixel_to_latlon(row_min, col_min, transform, crs)
+    lat2, lon2 = pixel_to_latlon(row_max, col_max, transform, crs)
     return {
         "lat_min": min(lat1, lat2),
         "lat_max": max(lat1, lat2),

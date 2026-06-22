@@ -11,12 +11,13 @@ from typing import Dict, Any
 
 import numpy as np
 
-from config.settings import CLOUD_DETECTION_CONFIG
+from config.settings import CLOUD_DETECTION_CONFIG, SPECTRAL_INDICES_CONFIG
 from src.utils.logger import get_logger
 
 logger = get_logger("step_02")
 
 SKIP_THRESHOLD = CLOUD_DETECTION_CONFIG["skip_removal_below_pct"]
+PRECOMPUTED   = SPECTRAL_INDICES_CONFIG.get("precomputed_indices", False)
 
 
 def run(t1_path: Path, t2_path: Path) -> Dict[str, Dict[str, Any]]:
@@ -35,8 +36,20 @@ def run(t1_path: Path, t2_path: Path) -> Dict[str, Dict[str, Any]]:
     t1_data, _ = read_geotiff(t1_path)
     t2_data, _ = read_geotiff(t2_path)
 
-    t1_result = _detect_single(t1_data, label="T1")
-    t2_result = _detect_single(t2_data, label="T2")
+    if PRECOMPUTED:
+        # Input bands are pre-computed indices (NDVI, NDBI, …), not raw reflectance.
+        # Cloud detection is meaningless — return 0 % coverage and skip removal.
+        h, w = t1_data.shape[1], t1_data.shape[2]
+        zero_mask = np.zeros((h, w), dtype=np.uint8)
+        logger.info("[T1] Pre-computed index bands — cloud detection skipped (0 % coverage)")
+        logger.info("[T2] Pre-computed index bands — cloud detection skipped (0 % coverage)")
+        t1_result = {"prob": zero_mask.astype(np.float32), "mask": zero_mask, "coverage_pct": 0.0}
+        h, w = t2_data.shape[1], t2_data.shape[2]
+        zero_mask2 = np.zeros((h, w), dtype=np.uint8)
+        t2_result = {"prob": zero_mask2.astype(np.float32), "mask": zero_mask2, "coverage_pct": 0.0}
+    else:
+        t1_result = _detect_single(t1_data, label="T1")
+        t2_result = _detect_single(t2_data, label="T2")
 
     # Skip cloud removal when BOTH images are below the threshold
     max_coverage = max(t1_result["coverage_pct"], t2_result["coverage_pct"])

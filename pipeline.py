@@ -161,6 +161,21 @@ class FoodSecurityPipeline:
             result["skipped"] = False
             self._log_step_end(3, "cloud_removal", start)
 
+        # ── Align T2 to T1 shape (real tiles may differ by 1-2 px) ──────────
+        t1_img = result["T1"]["image"]
+        t2_img = result["T2"]["image"]
+        if t2_img.shape[1:] != t1_img.shape[1:]:
+            import cv2
+            h, w = t1_img.shape[1], t1_img.shape[2]
+            logger.warning(
+                f"Aligning T2 {t2_img.shape[1:]} → T1 {t1_img.shape[1:]} after Step 03"
+            )
+            bands = [
+                cv2.resize(t2_img[b], (w, h), interpolation=cv2.INTER_LINEAR)
+                for b in range(t2_img.shape[0])
+            ]
+            result["T2"]["image"] = np.stack(bands, axis=0)
+
         self.results["step_03"] = result
         return result
 

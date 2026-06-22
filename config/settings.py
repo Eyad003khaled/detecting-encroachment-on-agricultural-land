@@ -57,6 +57,10 @@ SPECTRAL_INDICES_CONFIG = {
     "band_swir2": 5,
     # NDVI drop below this → yellow alert (unhealthy vegetation signal)
     "ndvi_degradation_threshold": -0.15,
+    # Set True when input TIFFs contain pre-computed indices (e.g. KEMET1):
+    # Band 0=NDVI, Band 1=NDBI, Band 2=MNDWI, Band 3=SAVI, Band 4=BSI, Band 5=NDWI
+    # Default False — only overridden at runtime via run.py --precomputed flag.
+    "precomputed_indices": False,
 }
 
 # ── Step 05 — Change Detection ───────────────────────────────────────────────

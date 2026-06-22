@@ -8,7 +8,7 @@ from typing import Dict, Any
 
 import numpy as np
 
-from config.settings import AGRICULTURE_SEGMENTATION_CONFIG, PROCESSED_DIR
+from config.settings import AGRICULTURE_SEGMENTATION_CONFIG, SPECTRAL_INDICES_CONFIG, PROCESSED_DIR
 from src.utils.logger import get_logger
 from src.utils.geo_utils import write_geotiff
 
@@ -26,11 +26,17 @@ def run(image: np.ndarray, meta: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         agri_mask: binary [H,W] uint8 (1 = agricultural pixel)
     """
-    try:
-        agri_mask = _run_segformer(image)
-    except Exception as e:
-        logger.warning(f"SegFormer failed ({e}). Using NDVI-based fallback.")
+    if SPECTRAL_INDICES_CONFIG.get("precomputed_indices", False):
+        # SegFormer expects real RGB — feeding spectral index bands would give garbage.
+        # Use Band 0 (NDVI) directly as a reliable fast fallback.
+        logger.info("Pre-computed index mode → using Band 0 (NDVI) threshold for agriculture mask")
         agri_mask = _ndvi_fallback(image)
+    else:
+        try:
+            agri_mask = _run_segformer(image)
+        except Exception as e:
+            logger.warning(f"SegFormer failed ({e}). Using NDVI-based fallback.")
+            agri_mask = _ndvi_fallback(image)
 
     agri_pct = float(agri_mask.mean() * 100)
     logger.info(f"Agricultural land detected: {agri_pct:.2f}% of image")
@@ -71,9 +77,13 @@ def _run_segformer(image: np.ndarray) -> np.ndarray:
 
 
 def _ndvi_fallback(image: np.ndarray) -> np.ndarray:
-    """Simple NDVI threshold as fallback (NIR=band3, Red=band2)."""
-    nir = image[3] if image.shape[0] > 3 else image[-1]
-    red = image[2] if image.shape[0] > 2 else image[0]
-    denom = nir + red
-    ndvi = np.where(denom > 0, (nir - red) / denom, 0.0)
+    """Simple NDVI threshold as fallback."""
+    if SPECTRAL_INDICES_CONFIG.get("precomputed_indices", False):
+        # Band 0 is already NDVI — use directly
+        ndvi = image[0].astype(np.float32)
+    else:
+        nir = image[3] if image.shape[0] > 3 else image[-1]
+        red = image[2] if image.shape[0] > 2 else image[0]
+        denom = nir + red
+        ndvi = np.where(denom > 0, (nir - red) / denom, 0.0)
     return (ndvi > 0.2).astype(np.uint8)

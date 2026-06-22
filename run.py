@@ -66,8 +66,19 @@ def parse_args():
     parser.add_argument("--image",      type=str, help="Image path (--register)")
     parser.add_argument("--date",       type=str, help="Image date (--register)")
     parser.add_argument("--dry-run",    action="store_true", help="Show plan without running")
+    parser.add_argument(
+        "--precomputed", action="store_true",
+        help="Input TIFFs have pre-computed indices (e.g. KEMET1: Band0=NDVI, Band1=NDBI …). "
+             "Skips cloud heuristic; uses bands directly in Steps 4 and 6. "
+             "Default OFF — for raw GEE/satellite imagery leave this flag out.",
+    )
 
     args = parser.parse_args()
+
+    if args.precomputed:
+        # Override the config flag at runtime — no permanent change to settings.py
+        from config import settings as _s
+        _s.SPECTRAL_INDICES_CONFIG["precomputed_indices"] = True
 
     if args.t1 and not args.t2:
         parser.error("--t2 required with --t1")

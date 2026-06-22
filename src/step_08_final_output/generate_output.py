@@ -64,10 +64,31 @@ def run(
 
     # ── 3. Extract per-region detections ────────────────────────────────────
     regions = _extract_regions(
-        red_score, building_mask, agri_mask, transform,
+        red_score, building_mask, agri_mask, transform, meta,
         t1_rgb, t2_rgb, yellow_mask, spectral_signal
     )
     logger.info(f"Detected {len(regions)} encroachment regions")
+
+    # ── 3b. Stamp visible red bounding boxes onto the colored map ────────────
+    # The building_mask from Step 07 fallback may have only a handful of pixels
+    # (invisible at display resolution). Drawing a filled + bordered rectangle for
+    # each confirmed region makes them clearly visible in the PNG regardless.
+    import cv2 as _cv2
+    RED_RGB = (255, 0, 0)   # colored is in RGB space
+    for r in regions:
+        x1, y1, x2, y2 = r["bbox_px"]
+        # Semi-transparent fill over the bounding box
+        roi = colored[y1:y2, x1:x2].astype(np.float32)
+        roi = (roi * 0.4 + np.array(RED_RGB, dtype=np.float32) * 0.6).astype(np.uint8)
+        colored[y1:y2, x1:x2] = roi
+        # Solid 2-px border so the box is visible even when area is tiny
+        _cv2.rectangle(colored, (x1, y1), (x2, y2), RED_RGB, 2)
+        # Small label: "RED" + score
+        label = f"RED {r['red_score']:.2f}"
+        _cv2.rectangle(colored, (x1, max(0, y1-18)), (x1 + 110, y1), RED_RGB, -1)
+        _cv2.putText(colored, label, (x1 + 2, max(14, y1 - 4)),
+                     _cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1, _cv2.LINE_AA)
+    logger.info(f"Annotated {len(regions)} region(s) on colored map")
 
     # ── 4. Reverse geocode each region ──────────────────────────────────────
     regions = _geocode_regions(regions)
@@ -89,7 +110,7 @@ def run(
     # ── 7. Save per-region chips ────────────────────────────────────────────
     chips_dir = OUTPUT_DIR / "region_chips"
     chips_dir.mkdir(exist_ok=True)
-    _save_region_chips(regions, chips_dir, t1_rgb, t2_rgb, transform)
+    _save_region_chips(regions, chips_dir, t1_rgb, t2_rgb, transform, spectral_signal)
 
     # ── 8. GeoJSON ──────────────────────────────────────────────────────────
     geojson_path = OUTPUT_DIR / "encroachment.geojson"
@@ -193,6 +214,7 @@ def _extract_regions(
     building_mask: np.ndarray,
     agri_mask:     np.ndarray,
     transform,
+    meta:          Dict[str, Any],
     t1_rgb:        Optional[np.ndarray],
     t2_rgb:        np.ndarray,
     yellow_mask:   Optional[np.ndarray],
@@ -219,9 +241,10 @@ def _extract_regions(
         c_min = max(0, x - pad)
         c_max = min(W_img, x + w + pad)
 
-        # lat/lon bounding box
+        # lat/lon bounding box — pass CRS so UTM is reprojected to WGS84
+        crs = meta.get("crs") if isinstance(meta, dict) else None
         coords = (
-            bbox_to_latlon(r_min, c_min, r_max, c_max, transform)
+            bbox_to_latlon(r_min, c_min, r_max, c_max, transform, crs)
             if transform else {}
         )
 
@@ -306,55 +329,123 @@ def _save_region_chips(
     t1_rgb: Optional[np.ndarray],
     t2_rgb: np.ndarray,
     transform,
+    spectral_signal: Optional[np.ndarray] = None,
 ) -> None:
+    """
+    Save before/after/change chips for each detected region.
+
+    Three panels side by side:
+      BEFORE (T1)  |  AFTER (T2)  |  SIGNAL (spectral change heatmap)
+
+    T1 and T2 use shared min/max normalisation so brightness is comparable.
+    The SIGNAL panel is the Step-04 spectral_signal [0,1] (NDVI drop + NDBI
+    rise) rendered as a thermal heatmap — bright yellow/red = strong change.
+    Falls back to amplified pixel diff when spectral_signal is unavailable.
+    """
     import cv2
+    GAP = 4   # px gap between panels
 
     for region in regions:
         c_min, r_min, c_max, r_max = region["chip_px"]
         coords = region.get("coordinates", {})
         rid = region["id"]
 
-        t2_chip = t2_rgb[r_min:r_max, c_min:c_max]
+        t2_chip = t2_rgb[r_min:r_max, c_min:c_max].copy()
 
         if t1_rgb is not None:
-            t1_chip = t1_rgb[r_min:r_max, c_min:c_max]
-            # Side-by-side before | after
-            chip_h = max(t1_chip.shape[0], t2_chip.shape[0])
-            chip_w = t1_chip.shape[1] + t2_chip.shape[1] + 4
+            t1_chip = t1_rgb[r_min:r_max, c_min:c_max].copy()
 
-            canvas = np.zeros((chip_h + 40, chip_w, 3), dtype=np.uint8)
-            canvas[:t1_chip.shape[0], :t1_chip.shape[1]] = t1_chip
-            canvas[:t2_chip.shape[0], t1_chip.shape[1]+4:t1_chip.shape[1]+4+t2_chip.shape[1]] = t2_chip
+            # ── Shared normalisation so T1 and T2 are directly comparable ──
+            t1_f = t1_chip.astype(np.float32)
+            t2_f = t2_chip.astype(np.float32)
+            g_min = min(t1_f.min(), t2_f.min())
+            g_max = max(t1_f.max(), t2_f.max())
+            if g_max > g_min:
+                t1_vis = ((t1_f - g_min) / (g_max - g_min) * 255).astype(np.uint8)
+                t2_vis = ((t2_f - g_min) / (g_max - g_min) * 255).astype(np.uint8)
+            else:
+                t1_vis, t2_vis = t1_chip, t2_chip
 
-            # Labels
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.putText(canvas, "BEFORE", (10, chip_h + 25), font, 0.6, (255,255,255), 1)
-            cv2.putText(canvas, "AFTER",  (t1_chip.shape[1]+14, chip_h + 25), font, 0.6, (0,100,255), 1)
+            # ── Change / signal panel ────────────────────────────────────────
+            ph, pw = t1_chip.shape[:2]
+            if spectral_signal is not None:
+                # Crop the pre-computed signal map to this chip region
+                sig_crop = spectral_signal[r_min:r_max, c_min:c_max]
+                # Rescale to [0,255] using local max for better contrast
+                sig_max = sig_crop.max()
+                if sig_max > 0:
+                    sig_u8 = (sig_crop / sig_max * 255).astype(np.uint8)
+                else:
+                    sig_u8 = sig_crop.astype(np.uint8)
+                # Apply COLORMAP_INFERNO: dark=low, yellow/white=high change
+                sig_bgr = cv2.applyColorMap(sig_u8, cv2.COLORMAP_INFERNO)
+                change_panel = cv2.cvtColor(sig_bgr, cv2.COLOR_BGR2RGB)
+            else:
+                # Fallback: amplified per-pixel diff (red=T2↑, blue=T2↓)
+                diff_mean = (t2_f - t1_f).mean(axis=2)
+                change_panel = np.full((ph, pw, 3), 30, dtype=np.uint8)
+                increase = np.clip( diff_mean * 10, 0, 225).astype(np.uint8)
+                decrease = np.clip(-diff_mean * 10, 0, 225).astype(np.uint8)
+                change_panel[:, :, 0] = np.clip(30 + increase, 0, 255)
+                change_panel[:, :, 2] = np.clip(30 + decrease, 0, 255)
 
-            # Draw red rect on T2 side marking the detected building area
+            # ── Canvas: 3 panels + label row ────────────────────────────────
+            pw = t1_vis.shape[1]   # panel width (all same after crop)
+            ph = t1_vis.shape[0]   # panel height
+            total_w = pw * 3 + GAP * 2
+            canvas = np.zeros((ph + 44, total_w, 3), dtype=np.uint8)
+
+            # Place panels
+            canvas[:ph, :pw] = t1_vis
+            canvas[:ph, pw + GAP : pw * 2 + GAP] = t2_vis
+            canvas[:ph, pw * 2 + GAP * 2 : pw * 3 + GAP * 2] = change_panel
+
+            # Dividers
+            canvas[:ph, pw:pw+GAP] = 60
+            canvas[:ph, pw*2+GAP:pw*2+GAP*2] = 60
+
+            # Draw red bbox on AFTER panel
             x, y, x2, y2 = region["bbox_px"]
-            rx1 = (x - c_min) + t1_chip.shape[1] + 4
-            ry1 = y - r_min
-            rx2 = (x2 - c_min) + t1_chip.shape[1] + 4
-            ry2 = y2 - r_min
-            cv2.rectangle(canvas, (rx1, ry1), (rx2, ry2), (0, 0, 255), 2)
+            bx1 = (x - c_min) + pw + GAP
+            by1 = y - r_min
+            bx2 = (x2 - c_min) + pw + GAP
+            by2 = y2 - r_min
+            cv2.rectangle(canvas, (bx1, by1), (bx2, by2), (255, 0, 0), 2)
+            # Same box on change panel
+            cx1 = (x - c_min) + pw * 2 + GAP * 2
+            cy1 = y - r_min
+            cx2 = (x2 - c_min) + pw * 2 + GAP * 2
+            cy2 = y2 - r_min
+            cv2.rectangle(canvas, (cx1, cy1), (cx2, cy2), (255, 255, 0), 2)
+
+            # Panel labels
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            lw = 1
+            cv2.putText(canvas, "BEFORE (T1)", (6, ph + 18), font, 0.45, (200,200,200), lw)
+            cv2.putText(canvas, "AFTER (T2)",  (pw + GAP + 6, ph + 18), font, 0.45, (100,180,255), lw)
+            cv2.putText(canvas, "CHANGE SIGNAL", (pw*2 + GAP*2 + 6, ph + 18), font, 0.45, (255,140,0), lw)
+            # Score line
+            score_txt = (f"area={region['area_ha']:.3f}ha  score={region['red_score']:.2f}")
+            cv2.putText(canvas, score_txt, (6, ph + 38), font, 0.42, (180,180,180), lw)
+
         else:
+            # No T1 — just T2 + CHANGE would be meaningless; show T2 with bbox
+            ph, pw = t2_chip.shape[:2]
             canvas = t2_chip.copy()
             x, y, x2, y2 = region["bbox_px"]
             cv2.rectangle(canvas,
                 (x - c_min, y - r_min),
                 (x2 - c_min, y2 - r_min),
-                (0, 0, 255), 2)
+                (255, 0, 0), 2)
 
-        # Lat/lon annotation
+        # Lat/lon header bar
         if coords:
             label = (
-                f"Lat {coords['center_lat']:.4f}  Lon {coords['center_lon']:.4f}  "
-                f"| {region['area_ha']:.2f} ha  red={region['red_score']:.2f}"
+                f"Lat {coords['center_lat']:.4f}  Lon {coords['center_lon']:.4f}"
             )
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            cv2.rectangle(canvas, (0, 0), (canvas.shape[1], 22), (0,0,0), -1)
-            cv2.putText(canvas, label, (5, 16), font, 0.45, (255,255,255), 1)
+            cv2.rectangle(canvas, (0, 0), (canvas.shape[1], 22), (0, 0, 0), -1)
+            cv2.putText(canvas, label, (5, 15), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.45, (255, 255, 255), 1, cv2.LINE_AA)
 
         cv2.imwrite(
             str(chips_dir / f"region_{rid:03d}.png"),
