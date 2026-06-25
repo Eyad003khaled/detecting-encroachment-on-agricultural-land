@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KEMET1 — Encroachment Classifier Results</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e0e0e0; padding: 24px; }
+  h1 { font-size: 1.5rem; font-weight: 600; color: #fff; margin-bottom: 4px; }
+  .subtitle { color: #888; font-size: 0.85rem; margin-bottom: 28px; }
+  .grid { display: grid; gap: 20px; }
+  .row-3 { grid-template-columns: repeat(3, 1fr); }
+  .row-2 { grid-template-columns: 1fr 1fr; }
+  .row-1 { grid-template-columns: 1fr; }
+  .card { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 10px; padding: 20px; }
+  .card-title { font-size: 0.8rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+  .metric-big { font-size: 2.4rem; font-weight: 700; color: #fff; }
+  .metric-label { font-size: 0.78rem; color: #666; margin-top: 4px; }
+  .metric-sub { font-size: 0.82rem; color: #aaa; margin-top: 6px; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; }
+  .tag-green { background: #0f3d1a; color: #4ade80; }
+  .tag-yellow { background: #3d2e00; color: #fbbf24; }
+  .tag-red { background: #3d0f0f; color: #f87171; }
+  .tag-blue { background: #0f1f3d; color: #60a5fa; }
+  canvas { max-width: 100%; }
+
+  /* Confusion matrix table */
+  .cm-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 8px; }
+  .cm-table th { color: #666; font-weight: 500; padding: 6px 10px; text-align: center; }
+  .cm-table td { padding: 10px 14px; text-align: center; font-weight: 600; border-radius: 4px; }
+  .cm-tn { background: #1e3a1e; color: #4ade80; }
+  .cm-tp { background: #1e3a1e; color: #4ade80; }
+  .cm-fn { background: #3a1e1e; color: #f87171; }
+  .cm-fp { background: #3a2e1e; color: #fbbf24; }
+  .cm-label { color: #555; font-size: 0.72rem; }
+  .threshold-badge { font-size: 0.72rem; padding: 3px 8px; border-radius: 12px; font-weight: 600; margin-left: 8px; }
+  .thresh-default { background: #1e2a3a; color: #60a5fa; }
+  .thresh-optimal { background: #3a1e3a; color: #c084fc; }
+  .note { font-size: 0.75rem; color: #666; margin-top: 10px; line-height: 1.5; }
+  .divider { border: none; border-top: 1px solid #2a2d3a; margin: 16px 0; }
+
+  .summary-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .summary-chip { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 10px 16px; }
+  .summary-chip .val { font-size: 1.4rem; font-weight: 700; color: #fff; }
+  .summary-chip .lbl { font-size: 0.72rem; color: #666; }
+
+  .feat-bar-bg { background: #2a2d3a; border-radius: 4px; height: 14px; width: 100%; margin-top: 4px; overflow: hidden; }
+  .feat-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+  .feat-row { margin-bottom: 10px; }
+  .feat-row-header { display: flex; justify-content: space-between; font-size: 0.78rem; }
+  .feat-name { color: #c0c0c0; font-family: monospace; }
+  .feat-val { color: #888; }
+
+  .band-NDVI { background: linear-gradient(90deg, #22c55e, #16a34a); }
+  .band-NDBI { background: linear-gradient(90deg, #f97316, #ea580c); }
+  .band-MNDWI { background: linear-gradient(90deg, #38bdf8, #0284c7); }
+  .band-SAVI { background: linear-gradient(90deg, #a3e635, #65a30d); }
+  .band-BSI { background: linear-gradient(90deg, #fbbf24, #d97706); }
+  .band-NDWI { background: linear-gradient(90deg, #818cf8, #4f46e5); }
+  .band-other { background: linear-gradient(90deg, #94a3b8, #64748b); }
+</style>
+</head>
+<body>
+
+<h1>KEMET1 — Encroachment Classifier Results</h1>
+<p class="subtitle">Random Forest · 47 features · 201 tile pairs (train/val/test split) · neg→pos labeling strategy</p>
+
+<!-- Summary chips -->
+<div class="summary-row">
+  <div class="summary-chip"><div class="val">201</div><div class="lbl">Total pairs</div></div>
+  <div class="summary-chip"><div class="val">34</div><div class="lbl">Positive (encroachment)</div></div>
+  <div class="summary-chip"><div class="val">167</div><div class="lbl">Negative</div></div>
+  <div class="summary-chip"><div class="val">47</div><div class="lbl">Features</div></div>
+  <div class="summary-chip"><div class="val">200</div><div class="lbl">RF Trees</div></div>
+  <div class="summary-chip"><div class="val">20.7s</div><div class="lbl">Training time</div></div>
+</div>
+
+<!-- Row 1: Key metrics -->
+<div class="grid row-3" style="margin-bottom:20px;">
+  <div class="card">
+    <div class="card-title">Test ROC-AUC</div>
+    <div class="metric-big" style="color:#60a5fa;">0.735</div>
+    <div class="metric-sub">Val: 0.466 &nbsp;·&nbsp; Train: 1.000</div>
+    <div class="note" style="margin-top:10px;">Train AUC=1.0 indicates overfitting on small training set (135 pairs, 22 positives). Test AUC=0.74 shows meaningful signal.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Test Avg Precision</div>
+    <div class="metric-big" style="color:#fbbf24;">0.455</div>
+    <div class="metric-sub">Val: 0.194 &nbsp;·&nbsp; Train: 1.000</div>
+    <div class="note" style="margin-top:10px;">Area under PR curve. Low val AP reflects class imbalance (6/33 positive) and model needing better calibration.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Optimal Threshold</div>
+    <div class="metric-big" style="color:#c084fc;">0.16</div>
+    <div class="metric-sub">Best val F1 = 0.353</div>
+    <div class="note" style="margin-top:10px;">Default 0.5 threshold misses all positives on val set. Lowering to 0.16 achieves perfect recall (6/6) at cost of high FP rate (22/27).</div>
+  </div>
+</div>
+
+<!-- Row 2: Confusion matrices -->
+<div class="grid row-2" style="margin-bottom:20px;">
+  <!-- Default threshold -->
+  <div class="card">
+    <div class="card-title">
+      Confusion Matrix — TEST SET
+      <span class="threshold-badge thresh-default">thresh=0.50</span>
+    </div>
+    <table class="cm-table">
+      <tr>
+        <th></th>
+        <th>Pred: No Encr.</th>
+        <th>Pred: Encr.</th>
+      </tr>
+      <tr>
+        <td class="cm-label">Act: No Encr.</td>
+        <td class="cm-tn">23<br><span style="font-weight:400;font-size:0.7rem;">TN</span></td>
+        <td class="cm-fp">4<br><span style="font-weight:400;font-size:0.7rem;">FP</span></td>
+      </tr>
+      <tr>
+        <td class="cm-label">Act: Encr.</td>
+        <td class="cm-fn">5<br><span style="font-weight:400;font-size:0.7rem;">FN</span></td>
+        <td class="cm-tp">1<br><span style="font-weight:400;font-size:0.7rem;">TP</span></td>
+      </tr>
+    </table>
+    <hr class="divider">
+    <div style="display:flex; gap:16px; font-size:0.8rem;">
+      <span>Precision: <b>0.200</b></span>
+      <span>Recall: <b>0.167</b></span>
+      <span>F1: <b>0.182</b></span>
+    </div>
+    <p class="note">Catches 1 of 6 encroachments. High class-imbalance causes model to default to negative.</p>
+  </div>
+
+  <!-- Optimal threshold -->
+  <div class="card">
+    <div class="card-title">
+      Confusion Matrix — TEST SET
+      <span class="threshold-badge thresh-optimal">thresh=0.16 (optimal)</span>
+    </div>
+    <table class="cm-table">
+      <tr>
+        <th></th>
+        <th>Pred: No Encr.</th>
+        <th>Pred: Encr.</th>
+      </tr>
+      <tr>
+        <td class="cm-label">Act: No Encr.</td>
+        <td class="cm-tn">4<br><span style="font-weight:400;font-size:0.7rem;">TN</span></td>
+        <td class="cm-fp">23<br><span style="font-weight:400;font-size:0.7rem;">FP</span></td>
+      </tr>
+      <tr>
+        <td class="cm-label">Act: Encr.</td>
+        <td class="cm-fn">0<br><span style="font-weight:400;font-size:0.7rem;">FN</span></td>
+        <td class="cm-tp">6<br><span style="font-weight:400;font-size:0.7rem;">TP</span></td>
+      </tr>
+    </table>
+    <hr class="divider">
+    <div style="display:flex; gap:16px; font-size:0.8rem;">
+      <span>Precision: <b>0.207</b></span>
+      <span>Recall: <b style="color:#4ade80;">1.000</b></span>
+      <span>F1: <b>0.343</b></span>
+    </div>
+    <p class="note">Catches <b>all 6</b> encroachments — zero missed. High FP rate (23) is the cost of 100% recall in a screening context.</p>
+  </div>
+</div>
+
+<!-- Row 3: Charts -->
+<div class="grid row-2" style="margin-bottom:20px;">
+  <!-- Bar chart: metrics comparison -->
+  <div class="card">
+    <div class="card-title">Metrics by Split</div>
+    <canvas id="metricsChart" height="220"></canvas>
+  </div>
+  <!-- Feature importance -->
+  <div class="card">
+    <div class="card-title">Top 15 Feature Importances</div>
+    <div id="featImportance"></div>
+  </div>
+</div>
+
+<!-- Row 4: Full width — analysis -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-title">Interpretation &amp; Next Steps</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; font-size:0.82rem; line-height:1.7; color:#aaa;">
+    <div>
+      <p style="color:#60a5fa; font-weight:600; margin-bottom:6px;">🔍 What the model learned</p>
+      <p>Top signal: <b style="color:#38bdf8;">MNDWI_diff_mean</b> (water content drop) followed by BSI and NDWI variability. Counter-intuitively, water-related indices dominate over NDVI/NDBI — likely because agricultural land in KEMET1 includes irrigated plots whose water signature changes when encroachment clears vegetation.</p>
+    </div>
+    <div>
+      <p style="color:#fbbf24; font-weight:600; margin-bottom:6px;">⚠️ Overfitting diagnosis</p>
+      <p>Train AUC=1.0 vs Test AUC=0.74 is a clear overfit signal. Root cause: only 22 positive examples in 135 training pairs. The RF memorises the training positives. Fix: add more positive tiles, apply stricter max_depth, or switch to cross-validated training.</p>
+    </div>
+    <div>
+      <p style="color:#4ade80; font-weight:600; margin-bottom:6px;">✅ Recommended next steps</p>
+      <p>1. Use threshold=0.16 for screening (100% recall) then hand-verify flagged tiles. 2. Tune max_depth=8–12 and min_samples_leaf to reduce overfit. 3. Add SMOTE or augment with synthetic positive pairs. 4. Consider per-tile cross-validation given limited sample size.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Metrics bar chart ─────────────────────────────────────────────────────
+const mCtx = document.getElementById('metricsChart').getContext('2d');
+new Chart(mCtx, {
+  type: 'bar',
+  data: {
+    labels: ['ROC-AUC', 'Avg Precision', 'Encr. Recall', 'Encr. Precision', 'Accuracy'],
+    datasets: [
+      {
+        label: 'Train',
+        data: [1.000, 1.000, 1.000, 1.000, 1.000],
+        backgroundColor: 'rgba(96,165,250,0.5)',
+        borderColor: '#60a5fa',
+        borderWidth: 1,
+      },
+      {
+        label: 'Val (thresh=0.16)',
+        data: [0.466, 0.194, 1.000, 0.214, 0.333],
+        backgroundColor: 'rgba(192,132,252,0.5)',
+        borderColor: '#c084fc',
+        borderWidth: 1,
+      },
+      {
+        label: 'Test (thresh=0.50)',
+        data: [0.735, 0.455, 0.167, 0.200, 0.727],
+        backgroundColor: 'rgba(251,191,36,0.5)',
+        borderColor: '#fbbf24',
+        borderWidth: 1,
+      },
+      {
+        label: 'Test (thresh=0.16)',
+        data: [0.735, 0.455, 1.000, 0.207, 0.303],
+        backgroundColor: 'rgba(74,222,128,0.5)',
+        borderColor: '#4ade80',
+        borderWidth: 1,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    scales: {
+      x: { ticks: { color: '#888', font: { size: 11 } }, grid: { color: '#2a2d3a' } },
+      y: { min: 0, max: 1.05, ticks: { color: '#888', stepSize: 0.2 }, grid: { color: '#2a2d3a' } }
+    },
+    plugins: {
+      legend: { labels: { color: '#aaa', font: { size: 11 } } },
+    }
+  }
+});
+
+// ── Feature importance bars ──────────────────────────────────────────────
+const features = [
+  { name: 'MNDWI_diff_mean',   val: 0.0430, band: 'MNDWI' },
+  { name: 'MNDWI_T1_std',      val: 0.0341, band: 'MNDWI' },
+  { name: 'MNDWI_T2_mean',     val: 0.0333, band: 'MNDWI' },
+  { name: 'BSI_T2_mean',       val: 0.0316, band: 'BSI'   },
+  { name: 'BSI_T1_std',        val: 0.0292, band: 'BSI'   },
+  { name: 'NDWI_T1_std',       val: 0.0277, band: 'NDWI'  },
+  { name: 'SAVI_T2_mean',      val: 0.0268, band: 'SAVI'  },
+  { name: 'BSI_diff_std',      val: 0.0264, band: 'BSI'   },
+  { name: 'NDVI_T1_std',       val: 0.0264, band: 'NDVI'  },
+  { name: 'frac_changed_10pct',val: 0.0261, band: 'other' },
+  { name: 'NDVI_T2_std',       val: 0.0260, band: 'NDVI'  },
+  { name: 'MNDWI_T1_mean',     val: 0.0257, band: 'MNDWI' },
+  { name: 'NDVI_T2_mean',      val: 0.0255, band: 'NDVI'  },
+  { name: 'SAVI_T1_std',       val: 0.0253, band: 'SAVI'  },
+  { name: 'NDBI_T1_std',       val: 0.0247, band: 'NDBI'  },
+];
+const maxVal = features[0].val;
+const container = document.getElementById('featImportance');
+features.forEach((f, i) => {
+  const pct = (f.val / maxVal * 100).toFixed(1);
+  container.innerHTML += `
+    <div class="feat-row">
+      <div class="feat-row-header">
+        <span class="feat-name">${i+1}. ${f.name}</span>
+        <span class="feat-val">${f.val.toFixed(4)}</span>
+      </div>
+      <div class="feat-bar-bg">
+        <div class="feat-bar-fill band-${f.band}" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+});
+
+// ── Legend ───────────────────────────────────────────────────────────────
+const bands = ['NDVI','NDBI','MNDWI','SAVI','BSI','NDWI'];
+const colors = { NDVI:'#22c55e',NDBI:'#f97316',MNDWI:'#38bdf8',SAVI:'#a3e635',BSI:'#fbbf24',NDWI:'#818cf8' };
+container.innerHTML += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:0.72rem;">` +
+  bands.map(b => `<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colors[b]};margin-right:4px;"></span>${b}</span>`).join('') +
+  `</div>`;
+</script>
+</body>
+</html>

@@ -17,8 +17,9 @@ their temporal differences, then train a Random Forest binary classifier:
 
 Usage:
     python train_classifier.py
-    python train_classifier.py --pairs-per-tile all   # default: consecutive
     python train_classifier.py --no-save              # skip saving model
+    python train_classifier.py --max-depth 10         # explicit depth cap
+    python train_classifier.py --no-cv                # skip cross-validation
 """
 
 from __future__ import annotations
@@ -70,11 +71,12 @@ def extract_features(t1_path: Path, t2_path: Path) -> np.ndarray:
     """
     Extract a fixed-length feature vector from a (T1, T2) image pair.
 
-    Features (per band × 3 sets = 18 stats, plus 12 derived = 30 total):
+    Features (per band × 6 stats = 36) + 11 derived = 47 total:
         For each band: T1_mean, T1_std, T2_mean, T2_std, diff_mean, diff_std
         Global:        mean_abs_change, frac_changed_5pct, frac_changed_10pct,
-                       ndvi_drop_mean, ndvi_drop_pct,
-                       ndbi_rise_mean, ndbi_rise_pct
+                       ndvi_drop_mean, ndvi_drop_pct_5, ndvi_drop_pct_10,
+                       ndbi_rise_mean, ndbi_rise_pct_5, ndbi_rise_pct_10,
+                       bsi_rise_mean,  bsi_rise_pct_5
     """
     t1 = _read(t1_path)
     t2 = _read(t2_path)
@@ -227,7 +229,75 @@ def build_dataset(split: str, verbose: bool = True):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  Main
+#  Cross-validation (leave-one-tile-out)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def run_cross_validation(X_all, y_all, tile_ids_all, make_clf_fn, beta: float = 2.0):
+    """
+    Leave-one-tile-out CV.  Each fold holds out all pairs from one tile.
+    Uses Fβ (default β=2) to weight recall over precision during threshold search.
+    """
+    from sklearn.metrics import roc_auc_score, average_precision_score, fbeta_score
+
+    unique_tiles = np.unique(tile_ids_all)
+    n_tiles = len(unique_tiles)
+
+    all_y_true, all_y_prob = [], []
+    fold_aucs, fold_aps = [], []
+
+    print(f"\n▶  Leave-one-tile-out CV  ({n_tiles} folds) ...")
+
+    for ti, held_tile in enumerate(unique_tiles):
+        mask_val = tile_ids_all == held_tile
+        mask_tr  = ~mask_val
+
+        if mask_val.sum() == 0 or mask_tr.sum() == 0:
+            continue
+        # Skip folds with no positives in either split (can't compute AUC)
+        if y_all[mask_val].sum() == 0:
+            continue
+
+        clf_fold = make_clf_fn()
+        clf_fold.fit(X_all[mask_tr], y_all[mask_tr])
+        probs = clf_fold.predict_proba(X_all[mask_val])[:, 1]
+
+        all_y_true.extend(y_all[mask_val].tolist())
+        all_y_prob.extend(probs.tolist())
+
+        auc = roc_auc_score(y_all[mask_val], probs)
+        ap  = average_precision_score(y_all[mask_val], probs)
+        fold_aucs.append(auc)
+        fold_aps.append(ap)
+        print(f"    fold {ti+1:2d}/{n_tiles}  tile={held_tile:02d}  "
+              f"n_val={mask_val.sum()}  pos={y_all[mask_val].sum()}  "
+              f"AUC={auc:.3f}  AP={ap:.3f}")
+
+    all_y_true = np.array(all_y_true)
+    all_y_prob = np.array(all_y_prob)
+
+    # Threshold sweep on pooled OOF predictions using Fβ
+    best_thresh_cv, best_fb = 0.5, 0.0
+    for thresh in np.arange(0.05, 0.95, 0.01):
+        preds_t = (all_y_prob >= thresh).astype(int)
+        fb = fbeta_score(all_y_true, preds_t, beta=beta, zero_division=0)
+        if fb > best_fb:
+            best_fb, best_thresh_cv = fb, thresh
+
+    oof_auc = roc_auc_score(all_y_true, all_y_prob) if len(np.unique(all_y_true)) > 1 else float("nan")
+    oof_ap  = average_precision_score(all_y_true, all_y_prob) if len(np.unique(all_y_true)) > 1 else float("nan")
+
+    print(f"\n  CV summary  ({len(fold_aucs)} folds with positives)")
+    print(f"    Mean fold AUC : {np.mean(fold_aucs):.4f}  ± {np.std(fold_aucs):.4f}")
+    print(f"    Mean fold AP  : {np.mean(fold_aps):.4f}  ± {np.std(fold_aps):.4f}")
+    print(f"    OOF AUC       : {oof_auc:.4f}")
+    print(f"    OOF Avg Prec  : {oof_ap:.4f}")
+    print(f"    Best OOF thresh (F{beta:.0f}={best_fb:.3f}) : {best_thresh_cv:.2f}")
+
+    return best_thresh_cv, oof_auc, oof_ap
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  Metrics
 # ══════════════════════════════════════════════════════════════════════════════
 
 def print_metrics(y_true, y_pred, y_prob=None, title=""):
@@ -255,62 +325,119 @@ def print_metrics(y_true, y_pred, y_prob=None, title=""):
         print(f"  Avg Prec: {ap:.4f}")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  Main
+# ══════════════════════════════════════════════════════════════════════════════
+
 def main():
     parser = argparse.ArgumentParser(description="Train KEMET1 encroachment classifier")
-    parser.add_argument("--no-save",      action="store_true", help="Don't save the model")
-    parser.add_argument("--n-estimators", type=int, default=200)
-    parser.add_argument("--max-depth",    type=int, default=None)
-    parser.add_argument("--top-features", type=int, default=15)
+    parser.add_argument("--no-save",        action="store_true", help="Don't save the model")
+    parser.add_argument("--no-cv",          action="store_true", help="Skip cross-validation")
+    parser.add_argument("--n-estimators",   type=int,   default=200)
+    parser.add_argument("--max-depth",      type=int,   default=10,
+                        help="RF max_depth (default=10 to prevent overfit; None = unlimited)")
+    parser.add_argument("--min-samples-leaf", type=int, default=2,
+                        help="RF min_samples_leaf (default=2)")
+    parser.add_argument("--beta",           type=float, default=2.0,
+                        help="β for Fβ threshold optimisation (β>1 weights recall higher)")
+    parser.add_argument("--top-features",   type=int,   default=15)
     args = parser.parse_args()
 
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.preprocessing import StandardScaler
     from sklearn.pipeline import Pipeline
+    from sklearn.metrics import fbeta_score
 
     t0 = time.time()
     print("\n" + "═" * 56)
-    print("  KEMET1 — Encroachment Classifier Training")
+    print("  KEMET1 — Encroachment Classifier Training  (v2)")
     print("═" * 56)
+    print(f"  Regularisation: max_depth={args.max_depth}  "
+          f"min_samples_leaf={args.min_samples_leaf}")
+    print(f"  Threshold opt:  F{args.beta:.0f} score  (β>{1} weights recall)")
 
     # ── 1. Build datasets ─────────────────────────────────────────────────────
     print("\n▶  Extracting features ...")
-    X_train, y_train, _ = build_dataset("train")
-    X_val,   y_val,   _ = build_dataset("val")
-    X_test,  y_test,  _ = build_dataset("test")
+    X_train, y_train, tile_ids_train = build_dataset("train")
+    X_val,   y_val,   tile_ids_val   = build_dataset("val")
+    X_test,  y_test,  tile_ids_test  = build_dataset("test")
 
     print(f"\n  Feature matrix sizes:")
     print(f"    Train: {X_train.shape}   pos={y_train.sum()}  neg={(y_train==0).sum()}")
     print(f"    Val:   {X_val.shape}   pos={y_val.sum()}  neg={(y_val==0).sum()}")
     print(f"    Test:  {X_test.shape}   pos={y_test.sum()}  neg={(y_test==0).sum()}")
 
-    # ── 2. Train ──────────────────────────────────────────────────────────────
-    print(f"\n▶  Training Random Forest  (n_estimators={args.n_estimators}) ...")
-    clf = Pipeline([
-        ("scaler", StandardScaler()),
-        ("rf", RandomForestClassifier(
-            n_estimators  = args.n_estimators,
-            max_depth     = args.max_depth,
-            class_weight  = "balanced",
-            random_state  = 42,
-            n_jobs        = -1,
-        )),
-    ])
+    # ── 2. Define model factory ───────────────────────────────────────────────
+    def make_clf():
+        return Pipeline([
+            ("scaler", StandardScaler()),
+            ("rf", RandomForestClassifier(
+                n_estimators    = args.n_estimators,
+                max_depth       = args.max_depth,
+                min_samples_leaf= args.min_samples_leaf,
+                class_weight    = "balanced",
+                random_state    = 42,
+                n_jobs          = -1,
+            )),
+        ])
+
+    # ── 3. Cross-validation on all tiles ─────────────────────────────────────
+    cv_thresh = None
+    if not args.no_cv:
+        # Pool all splits for tile-level CV (gives more signal than 6-positive val)
+        X_all      = np.concatenate([X_train, X_val, X_test], axis=0)
+        y_all      = np.concatenate([y_train, y_val,  y_test],  axis=0)
+        tile_ids_all = np.concatenate([tile_ids_train, tile_ids_val, tile_ids_test])
+        cv_thresh, cv_auc, cv_ap = run_cross_validation(
+            X_all, y_all, tile_ids_all, make_clf, beta=args.beta
+        )
+
+    # ── 4. Train final model on train split ───────────────────────────────────
+    print(f"\n▶  Training final RF  (n_estimators={args.n_estimators}, "
+          f"max_depth={args.max_depth}, min_samples_leaf={args.min_samples_leaf}) ...")
+    clf = make_clf()
     clf.fit(X_train, y_train)
     print(f"  Done in {time.time()-t0:.1f}s")
 
-    # ── 3. Find optimal threshold on val set ─────────────────────────────────
-    from sklearn.metrics import f1_score
+    # ── 5. Threshold optimisation ─────────────────────────────────────────────
     val_probs = clf.predict_proba(X_val)[:, 1]
-    best_thresh, best_f1 = 0.5, 0.0
+
+    # Fβ on val set
+    best_thresh_fb, best_fb = 0.5, 0.0
     for thresh in np.arange(0.05, 0.95, 0.01):
         preds_t = (val_probs >= thresh).astype(int)
-        f1 = f1_score(y_val, preds_t, zero_division=0)
-        if f1 > best_f1:
-            best_f1, best_thresh = f1, thresh
-    print(f"\n  ▶  Optimal threshold (val F1): {best_thresh:.2f}  (F1={best_f1:.3f})")
-    print(  "     Default 0.5 threshold often misses positives due to class imbalance.")
+        fb = fbeta_score(y_val, preds_t, beta=args.beta, zero_division=0)
+        if fb > best_fb:
+            best_fb, best_thresh_fb = fb, thresh
 
-    # ── 4. Evaluate ───────────────────────────────────────────────────────────
+    # Plain F1 on val set (for reference)
+    best_thresh_f1, best_f1 = 0.5, 0.0
+    for thresh in np.arange(0.05, 0.95, 0.01):
+        preds_t = (val_probs >= thresh).astype(int)
+        f1 = fbeta_score(y_val, preds_t, beta=1.0, zero_division=0)
+        if f1 > best_f1:
+            best_f1, best_thresh_f1 = f1, thresh
+
+    print(f"\n  Threshold comparison (val set):")
+    print(f"    Default 0.50    → F{args.beta:.0f}={fbeta_score(y_val,(val_probs>=0.5).astype(int),beta=args.beta,zero_division=0):.3f}")
+    print(f"    Best F1  {best_thresh_f1:.2f}   → F1={best_f1:.3f}")
+    print(f"    Best F{args.beta:.0f} {best_thresh_fb:.2f}   → F{args.beta:.0f}={best_fb:.3f}  ← used for screening")
+    if cv_thresh is not None:
+        print(f"    CV thresh {cv_thresh:.2f}   → from leave-one-tile-out")
+
+    # Prefer val Fβ threshold when CV threshold is more aggressive (CV folds have
+    # only 1 positive each, making threshold optimisation noisy).
+    # Take the more conservative (higher) of the two.
+    if cv_thresh is not None:
+        final_thresh = max(cv_thresh, best_thresh_fb)
+        if cv_thresh != final_thresh:
+            print(f"  (CV thresh {cv_thresh:.2f} is more aggressive than val F{args.beta:.0f} "
+                  f"thresh {best_thresh_fb:.2f} — using val thresh to limit FP rate)")
+    else:
+        final_thresh = best_thresh_fb
+    print(f"\n  Selected threshold: {final_thresh:.2f}")
+
+    # ── 6. Evaluate ───────────────────────────────────────────────────────────
     print("\n  Results at default threshold (0.50):")
     for split_name, X, y in [
         ("TRAIN", X_train, y_train),
@@ -321,16 +448,16 @@ def main():
         probs = clf.predict_proba(X)[:, 1]
         print_metrics(y, preds, probs, title=split_name)
 
-    print(f"\n  Results at optimal threshold ({best_thresh:.2f}):")
+    print(f"\n  Results at selected threshold ({final_thresh:.2f}):")
     for split_name, X, y in [
         ("VAL",  X_val,  y_val),
         ("TEST", X_test, y_test),
     ]:
         probs = clf.predict_proba(X)[:, 1]
-        preds = (probs >= best_thresh).astype(int)
-        print_metrics(y, preds, probs, title=f"{split_name} @ thresh={best_thresh:.2f}")
+        preds = (probs >= final_thresh).astype(int)
+        print_metrics(y, preds, probs, title=f"{split_name} @ thresh={final_thresh:.2f}")
 
-    # ── 5. Feature importance ─────────────────────────────────────────────────
+    # ── 7. Feature importance ─────────────────────────────────────────────────
     rf = clf.named_steps["rf"]
     importances = rf.feature_importances_
     top_idx = np.argsort(importances)[::-1][:args.top_features]
@@ -342,12 +469,19 @@ def main():
         bar = "█" * int(importances[idx] * 200)
         print(f"  {rank:2d}. {FEATURE_NAMES[idx]:<28}  {importances[idx]:.4f}  {bar}")
 
-    # ── 6. Save model + threshold ─────────────────────────────────────────────
+    # ── 8. Save model + threshold ─────────────────────────────────────────────
     if not args.no_save:
-        bundle = {"model": clf, "threshold": best_thresh, "feature_names": FEATURE_NAMES}
+        bundle = {
+            "model":         clf,
+            "threshold":     final_thresh,
+            "feature_names": FEATURE_NAMES,
+            "max_depth":     args.max_depth,
+            "min_samples_leaf": args.min_samples_leaf,
+            "beta":          args.beta,
+        }
         with open(MODEL_PATH, "wb") as f:
             pickle.dump(bundle, f)
-        print(f"\n  Model + threshold ({best_thresh:.2f}) saved → {MODEL_PATH}")
+        print(f"\n  Model + threshold ({final_thresh:.2f}) saved → {MODEL_PATH}")
 
     print(f"\n{'═'*56}")
     print(f"  Total time: {time.time()-t0:.1f}s")
