@@ -67,16 +67,20 @@ def _align(t2: np.ndarray, t1: np.ndarray) -> np.ndarray:
     )
 
 
-def extract_features(t1_path: Path, t2_path: Path) -> np.ndarray:
+def extract_features(t1_path: Path, t2_path: Path,
+                     t1_is_pos: bool = False) -> np.ndarray:
     """
     Extract a fixed-length feature vector from a (T1, T2) image pair.
 
-    Features (per band × 6 stats = 36) + 11 derived = 47 total:
+    Features (per band × 6 stats = 36) + 11 derived + 1 prior = 48 total:
         For each band: T1_mean, T1_std, T2_mean, T2_std, diff_mean, diff_std
         Global:        mean_abs_change, frac_changed_5pct, frac_changed_10pct,
                        ndvi_drop_mean, ndvi_drop_pct_5, ndvi_drop_pct_10,
                        ndbi_rise_mean, ndbi_rise_pct_5, ndbi_rise_pct_10,
                        bsi_rise_mean,  bsi_rise_pct_5
+        Prior:         t1_is_pos  (1 if T1 was already encroached, else 0)
+                       ↳ suppresses pos→pos FPs — model learns that if T1 is
+                         already encroached the "change" seen is residual, not new.
     """
     t1 = _read(t1_path)
     t2 = _read(t2_path)
@@ -128,6 +132,9 @@ def extract_features(t1_path: Path, t2_path: Path) -> np.ndarray:
         float((bsi_rise > 0.05).mean()),
     ]
 
+    # Prior-label feature — key fix for pos→pos false positives
+    feats.append(1.0 if t1_is_pos else 0.0)
+
     return np.array(feats, dtype=np.float32)
 
 
@@ -141,6 +148,7 @@ FEATURE_NAMES += [
     "ndvi_drop_mean", "ndvi_drop_pct_5", "ndvi_drop_pct_10",
     "ndbi_rise_mean", "ndbi_rise_pct_5", "ndbi_rise_pct_10",
     "bsi_rise_mean", "bsi_rise_pct_5",
+    "t1_is_pos",   # prior-label: 1 if T1 was already encroached
 ]
 
 
@@ -210,7 +218,9 @@ def build_dataset(split: str, verbose: bool = True):
         if verbose:
             print(f"    [{i+1:3d}/{len(pairs)}]  {tag}  label={label}", end="  ")
         try:
-            feats = extract_features(t1_path, t2_path)
+            t1_lbl = "pos" if t1_path.stem.endswith("pos") else "neg"
+            feats = extract_features(t1_path, t2_path,
+                                     t1_is_pos=(t1_lbl == "pos"))
             X.append(feats)
             y.append(label)
             tile_ids.append(tile_id)
@@ -334,10 +344,10 @@ def main():
     parser.add_argument("--no-save",        action="store_true", help="Don't save the model")
     parser.add_argument("--no-cv",          action="store_true", help="Skip cross-validation")
     parser.add_argument("--n-estimators",   type=int,   default=200)
-    parser.add_argument("--max-depth",      type=int,   default=10,
-                        help="RF max_depth (default=10 to prevent overfit; None = unlimited)")
-    parser.add_argument("--min-samples-leaf", type=int, default=2,
-                        help="RF min_samples_leaf (default=2)")
+    parser.add_argument("--max-depth",      type=int,   default=8,
+                        help="RF max_depth (default=8 to prevent overfit; None = unlimited)")
+    parser.add_argument("--min-samples-leaf", type=int, default=3,
+                        help="RF min_samples_leaf (default=3)")
     parser.add_argument("--beta",           type=float, default=2.0,
                         help="β for Fβ threshold optimisation (β>1 weights recall higher)")
     parser.add_argument("--top-features",   type=int,   default=15)
@@ -471,13 +481,18 @@ def main():
 
     # ── 8. Save model + threshold ─────────────────────────────────────────────
     if not args.no_save:
+        test_probs = clf.predict_proba(X_test)[:, 1]
+        from sklearn.metrics import roc_auc_score as _auc
+        _test_auc = float(_auc(y_test, test_probs)) if len(np.unique(y_test)) > 1 else float("nan")
         bundle = {
-            "model":         clf,
-            "threshold":     final_thresh,
-            "feature_names": FEATURE_NAMES,
-            "max_depth":     args.max_depth,
+            "model":          clf,
+            "threshold":      final_thresh,
+            "feature_names":  FEATURE_NAMES,
+            "model_name":     f"RF depth={args.max_depth} leaf={args.min_samples_leaf}",
+            "max_depth":      args.max_depth,
             "min_samples_leaf": args.min_samples_leaf,
-            "beta":          args.beta,
+            "beta":           args.beta,
+            "test_auc":       _test_auc,
         }
         with open(MODEL_PATH, "wb") as f:
             pickle.dump(bundle, f)

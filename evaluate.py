@@ -42,36 +42,68 @@ def _decision(prob, thresh):
 #  Per-pair evaluation
 # ══════════════════════════════════════════════════════════════════════════════
 
-def evaluate_split(split, model, threshold):
+SEASONAL_DAMPEN = 0.6   # multiplier when ALL pairs for a tile flag positive
+
+
+def evaluate_split(split, model, threshold, apply_consistency=True):
     split_dir = DATA_DIR / split
     pairs = build_pairs(split_dir)
 
-    rows = []
+    # ── Step 1: raw probabilities ─────────────────────────────────────────────
+    raw = []
     for t1_path, t2_path, true_label, tile_id in pairs:
-        try:
-            feats = extract_features(t1_path, t2_path)
-            prob  = model.predict_proba(feats.reshape(1, -1))[0, 1]
-        except Exception as e:
-            prob = float("nan")
-
-        pred = int(prob >= threshold) if not np.isnan(prob) else -1
-        correct = (pred == true_label)
-
-        # Transition type from filenames
         t1_lbl = "pos" if t1_path.stem.endswith("pos") else "neg"
         t2_lbl = "pos" if t2_path.stem.endswith("pos") else "neg"
-        transition = f"{t1_lbl}→{t2_lbl}"
+        try:
+            feats = extract_features(t1_path, t2_path,
+                                     t1_is_pos=(t1_lbl == "pos"))
+            prob = model.predict_proba(feats.reshape(1, -1))[0, 1]
+        except Exception:
+            prob = float("nan")
+        raw.append({
+            "tile_id": tile_id, "t1_lbl": t1_lbl, "t2_lbl": t2_lbl,
+            "true_label": true_label, "prob": prob,
+            "t1": t1_path.name, "t2": t2_path.name,
+        })
 
+    # ── Step 2: temporal consistency filter (Fix #2) ─────────────────────────
+    # If every pair for a tile flags positive, dampen — likely seasonal drift.
+    # Only applied to tiles with NO true positive pair (all neg→neg).
+    if apply_consistency:
+        from collections import defaultdict
+        tile_probs = defaultdict(list)
+        for r in raw:
+            tile_probs[r["tile_id"]].append(r["prob"])
+
+        for r in raw:
+            tid = r["tile_id"]
+            probs = tile_probs[tid]
+            valid = [p for p in probs if not np.isnan(p)]
+            all_flagged = all(p >= threshold for p in valid) and len(valid) > 1
+            has_true_pos = r["true_label"] == 1  # check conservatively per-pair
+            # Only dampen if the whole tile is flagged AND this pair is neg true
+            if all_flagged and r["true_label"] == 0 and not np.isnan(r["prob"]):
+                r["prob"] = round(r["prob"] * SEASONAL_DAMPEN, 4)
+                r["consistency_dampened"] = True
+            else:
+                r["consistency_dampened"] = False
+
+    # ── Step 3: build final rows ──────────────────────────────────────────────
+    rows = []
+    for r in raw:
+        prob = r["prob"]
+        pred = int(prob >= threshold) if not np.isnan(prob) else -1
         rows.append({
-            "split":      split,
-            "tile_id":    tile_id,
-            "transition": transition,
-            "true_label": true_label,
-            "prob":       round(float(prob), 4),
-            "pred":       pred,
-            "correct":    correct,
-            "t1":         t1_path.name,
-            "t2":         t2_path.name,
+            "split":       split,
+            "tile_id":     r["tile_id"],
+            "transition":  f"{r['t1_lbl']}→{r['t2_lbl']}",
+            "true_label":  r["true_label"],
+            "prob":        round(float(prob), 4),
+            "pred":        pred,
+            "correct":     (pred == r["true_label"]),
+            "dampened":    r.get("consistency_dampened", False),
+            "t1":          r["t1"],
+            "t2":          r["t2"],
         })
 
     return rows
@@ -386,7 +418,7 @@ function buildTable(rows) {{
           <span class="prob-fill" style="width:${{pct}}%;background:${{probColor}}"></span>
         </span>
       </td>
-      <td>${{decisionBadge}}</td>
+      <td>${{decisionBadge}}${{r.dampened ? ' <span title="temporal consistency dampened" style="color:#888;font-size:0.7rem">🔇</span>' : ''}}</td>
       <td><span class="badge ${{badgeClass}}">${{badgeText}}</span></td>`;
     body.appendChild(tr);
   }});
