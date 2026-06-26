@@ -128,7 +128,7 @@
     <div class="tl-name">Temporal consistency</div>
     <div class="tl-auc" style="color:#a3e635;">0.963</div>
     <div class="tl-fp" style="color:#4ade80;">FP=3  FN=0</div>
-    <p style="font-size:0.7rem;color:#555;margin-top:6px;">Majority filter: if ≥2 of 3 pairs flag positive for a tile, dampen all scores × 0.6 to suppress seasonal drift.</p>
+    <p style="font-size:0.7rem;color:#555;margin-top:6px;">Two-case majority filter: if pos→pos pairs fire anomalously, dampen only those (signal preserved). For all-negative tiles with ≥2 pairs firing, dampen all.</p>
   </div>
   <div class="tl-card active">
     <div class="tl-step">v4 Final — Tighter regularisation</div>
@@ -316,25 +316,29 @@
   <div class="card">
     <div class="card-title">Post-Processing: Temporal Consistency Filter</div>
     <div style="font-size:0.83rem;color:#aaa;line-height:1.8;">
-      <p style="margin-bottom:10px;">For each tile, scores across all consecutive image pairs (T1→T2, T2→T3, T3→T4) are evaluated together:</p>
+      <p style="margin-bottom:10px;">For each tile, scores across all consecutive pairs (T1→T2, T2→T3, T3→T4) are evaluated together. Two cases:</p>
       <div style="background:#1e2130;border-radius:8px;padding:14px;margin-bottom:12px;font-family:monospace;font-size:0.78rem;color:#c0c0c0;">
-        <span style="color:#666;">IF</span> n_pairs_above_threshold <span style="color:#60a5fa;">≥ 2</span> (MAJORITY_THRESH)<br>
-        <span style="color:#666;">THEN</span> all_scores × <span style="color:#fbbf24;">0.6</span>  (SEASONAL_DAMPEN)<br>
-        <span style="color:#666;"># flags as seasonal drift, not true encroachment</span>
+        <span style="color:#a3e635;"># Case 1 — established-encroachment drift</span><br>
+        <span style="color:#666;">IF</span> n_pos_pos_pairs_above_thresh <span style="color:#60a5fa;">≥ 1</span><br>
+        &nbsp;&nbsp; <span style="color:#666;">AND</span> total_pairs_above_thresh <span style="color:#60a5fa;">≥ 2</span> (MAJORITY_THRESH)<br>
+        <span style="color:#666;">THEN</span> dampen <span style="color:#fbbf24;">only pos→pos pairs</span> × 0.6 &nbsp;<span style="color:#555;"># signal pair untouched</span><br><br>
+        <span style="color:#a3e635;"># Case 2 — all-negative tile drift</span><br>
+        <span style="color:#666;">IF</span> no_pos_pos_pairs <span style="color:#666;">AND</span> n_neg_neg_above_thresh <span style="color:#60a5fa;">≥ 2</span><br>
+        <span style="color:#666;">THEN</span> dampen <span style="color:#fbbf24;">all pairs</span> × 0.6 &nbsp;<span style="color:#555;"># no signal pair to protect</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.78rem;">
         <div style="background:#1e2130;border-radius:6px;padding:10px;">
-          <div style="color:#4ade80;font-weight:600;margin-bottom:4px;">✓ True Positive tile</div>
-          <div style="color:#666;">Only 1 pair (neg→pos) flags<br>Dampening NOT triggered<br>Score stays high → TP</div>
+          <div style="color:#4ade80;font-weight:600;margin-bottom:4px;">✓ True encroachment tile</div>
+          <div style="color:#666;">neg→pos pair fires high (signal)<br>pos→pos pairs dampened if anomalous<br>neg→pos score preserved → TP</div>
         </div>
         <div style="background:#1e2130;border-radius:6px;padding:10px;">
           <div style="color:#fbbf24;font-weight:600;margin-bottom:4px;">⚠ Seasonal FP tile</div>
-          <div style="color:#666;">2-3 pairs all flag positive<br>Dampening triggered × 0.6<br>Score drops below thresh → TN</div>
+          <div style="color:#666;">≥2 neg→neg pairs all fire high<br>All scores dampened × 0.6<br>Score drops below thresh → TN</div>
         </div>
       </div>
     </div>
     <p class="note" style="margin-top:12px;">
-      The t1_is_pos feature (#1 importance, 0.077) handles pos→pos pairs upstream — the temporal filter then catches remaining seasonal drift in neg→neg tiles.
+      Case 1 preserves the neg→pos signal even when pos→pos windows drift — the neg→pos pair is never dampened, only the spurious pos→pos fires. This fixed a tile_01 FN where all 3 pairs fired, causing naive dampening to kill the true signal.
     </p>
   </div>
 </div>
