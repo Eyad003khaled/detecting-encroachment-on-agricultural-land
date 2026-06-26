@@ -1,0 +1,36 @@
+{
+  "full": {
+    "val_auc": 0.9444,
+    "test_auc": 1.0,
+    "test_cm": [
+      [
+        32,
+        2
+      ],
+      [
+        0,
+        11
+      ]
+    ],
+    "test_f1": 0.9167,
+    "n_features": 46
+  },
+  "ablation": {
+    "val_auc": 0.8763,
+    "test_auc": 0.8824,
+    "test_cm": [
+      [
+        27,
+        7
+      ],
+      [
+        2,
+        9
+      ]
+    ],
+    "test_f1": 0.6667,
+    "n_features": 44
+  },
+  "delta_val_auc": -0.0681,
+  "delta_test_auc": -0.1176
+}

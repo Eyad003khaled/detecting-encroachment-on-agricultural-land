@@ -112,7 +112,7 @@ def run(before_path, after_path, site_name):
     clat = (wgs[1]+wgs[3])/2; clon = (wgs[0]+wgs[2])/2
 
     bundle = pickle.load(open(MODEL_PATH,"rb"))
-    feat = bundle["imputer"].transform(pair_features(d1,d2).reshape(1,-1))
+    feat = np.nan_to_num(pair_features(d1,d2), nan=0.0).reshape(1,-1)
     prob = float(bundle["model"].predict_proba(feat)[0,1])
     label = "ENCROACHMENT DETECTED" if prob>=0.40 else "No encroachment"
     sc = "#ff4444" if prob>=0.40 else "#44ff88"

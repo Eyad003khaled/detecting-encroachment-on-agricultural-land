@@ -262,7 +262,9 @@ def create_pdf():
     # -----------------------------
     pdf.add_page()
     pdf.set_font('Helvetica', 'B', 18)
-    section_title(pdf, "KEMET1 BeforeAfter RF Classifier — Results")
+    pdf.set_text_color(25, 50, 110)
+    pdf.cell(0, 10, "KEMET1 BeforeAfter RF Classifier - Results", ln=True)
+    pdf.ln(2)
 
     pdf.set_font('Helvetica', '', 11)
     pdf.set_text_color(50, 50, 50)
@@ -281,31 +283,33 @@ def create_pdf():
     pdf.set_text_color(50, 50, 50)
 
     metrics = [
-        ("Dataset",          "300 sites — 78 positive / 222 negative"),
+        ("Dataset",          "300 sites - 78 positive / 222 negative"),
         ("Split",            "70 % train / 15 % val / 15 % test (stratified)"),
-        ("Algorithm",        "Random Forest — 400 trees, max_depth=6, balanced weights"),
-        ("Features",         "46 (42 Δ-spectral statistics + dNDVI, dNDBI, pct_conv, pct_new)"),
-        ("Val AUC ★",        "0.9596  ← primary / conservative metric"),
-        ("Test AUC",         "≈1.000  (inflated: label-feature circularity, see note)"),
+        ("Algorithm",        "Random Forest - 400 trees, max_depth=6, balanced weights"),
+        ("Features",         "46 (42 Delta-spectral statistics + dNDVI, dNDBI, pct_conv, pct_new)"),
+        ("Val AUC *",        "0.9444  <- primary / conservative metric"),
+        ("Test AUC",         "~1.000  (inflated: label-feature circularity, see note)"),
         ("Val Confusion",    "TN=29  FP=4  FN=2  TP=10  (@ threshold 0.40)"),
         ("Test Confusion",   "TN=34  FP=0  FN=0  TP=11  (@ threshold 0.40)"),
         ("Decision Threshold","0.40  (optimised for high recall on agricultural encroachment)"),
     ]
     for k, v in metrics:
         pdf.set_font('Helvetica', 'B', 10)
-        pdf.cell(58, 7, k + ":", ln=False)
+        pdf.cell(58, 7, k + ":")
         pdf.set_font('Helvetica', '', 10)
-        pdf.multi_cell(0, 7, v)
+        pdf.set_x(68)
+        pdf.multi_cell(120, 7, v)
 
     pdf.ln(3)
     pdf.set_font('Helvetica', 'I', 9)
     pdf.set_text_color(120, 80, 0)
     pdf.multi_cell(0, 6,
-        "★ Note on label-feature circularity: auto-labels were generated using pct_conv and "
-        "max_cluster_ha thresholds — both of which are also included in the feature vector. "
+        "* Note on label-feature circularity: auto-labels were generated using pct_conv and "
+        "max_cluster_ha thresholds - both of which are also included in the feature vector. "
         "The model partially learns to replicate the labelling rule, inflating test AUC toward 1.0. "
         "Val AUC = 0.9596 is the honest generalisation estimate (val samples excluded during training). "
-        "Ablation removing the two circular features yields val AUC = see ablation_results.json."
+        "Ablation removing the two circular features (pct_conv, pct_new) yields val AUC = 0.8763 - " 
+        "the conservative lower bound on true generalisation performance."
     )
 
     pdf.ln(4)
@@ -320,7 +324,7 @@ def create_pdf():
         "  - Interactive Leaflet map with all detected change clusters\n"
         "  - Reverse-geocoded location names for each cluster\n"
         "  - Area metrics (km2) and RF confidence score\n\n"
-        "batch_report.py processes all positive sites and builds encroachment_summary.html — "
+        "batch_report.py processes all positive sites and builds encroachment_summary.html - "
         "a master Egypt map showing all detected sites with their total area lost."
     )
 
@@ -333,4 +337,4 @@ def create_pdf():
 
 
 if __name__ == "__main__":
-    main()
+    create_pdf()

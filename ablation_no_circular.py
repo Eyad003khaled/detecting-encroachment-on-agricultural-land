@@ -54,7 +54,7 @@ def pair_features_full(d1, d2):
 def pair_features_ablation(d1, d2):
     """44 features — pct_conv and pct_new removed."""
     fd = extract_stats(d2 - d1)
-    ndvi1 = d1[0]; ndvi2 = d2[0]; ndbi2 = d2[1]
+    ndvi1 = d1[0]; ndbi1 = d1[1]; ndvi2 = d2[0]; ndbi2 = d2[1]
     return np.concatenate([fd, [float(np.nanmean(ndvi2-ndvi1)),
                                 float(np.nanmean(ndbi2-ndbi1 if d2.shape[0]>1 else 0))]])
 
