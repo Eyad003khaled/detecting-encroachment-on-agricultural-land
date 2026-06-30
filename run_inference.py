@@ -114,12 +114,43 @@ def run(before_path, after_path, site_name):
     bundle = pickle.load(open(MODEL_PATH,"rb"))
     feat = np.nan_to_num(pair_features(d1,d2), nan=0.0).reshape(1,-1)
     prob = float(bundle["model"].predict_proba(feat)[0,1])
-    label = "ENCROACHMENT DETECTED" if prob>=0.40 else "No encroachment"
-    sc = "#ff4444" if prob>=0.40 else "#44ff88"
+    ALERT_THRESHOLD = 0.40
+    label = "ENCROACHMENT DETECTED" if prob>=ALERT_THRESHOLD else "No encroachment"
+    sc = "#ff4444" if prob>=ALERT_THRESHOLD else "#44ff88"
+
+    if prob < ALERT_THRESHOLD:
+        no_enc_css = ("body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',sans-serif;"
+                      "display:flex;flex-direction:column;align-items:center;justify-content:center;"
+                      "height:100vh;margin:0;text-align:center}"
+                      ".box{background:#161b22;border:1px solid #30363d;border-radius:8px;"
+                      "padding:20px 32px;display:inline-block;margin-top:16px}"
+                      ".score{font-size:2.2rem;font-weight:700;color:#44ff88}"
+                      ".lbl{font-size:10px;color:#6e7681;text-transform:uppercase;letter-spacing:.06em}"
+                      "footer{position:fixed;bottom:10px;font-size:10px;color:#6e7681}")
+        no_enc_html = "\n".join([
+            "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>",
+            "<title>KEMET1 - "+site_name+"</title>",
+            "<style>"+no_enc_css+"</style>",
+            "</head><body>",
+            "<div><div style='font-size:3rem;margin-bottom:8px'>&#x2705;</div>",
+            "<h1 style='color:#44ff88;font-size:1.5rem;margin-bottom:6px'>No Encroachment Detected</h1>",
+            "<p style='color:#6e7681;font-size:0.85rem;margin-bottom:0'>%s &middot; RF score below alert threshold (0.40)</p>" % site_name,
+            "<div class='box'><div class='score'>%.3f</div>" % prob,
+            "<div class='lbl'>RF Score</div></div>",
+            "<p style='margin-top:20px;font-size:11px;color:#6e7681'>Full report suppressed &mdash; no significant encroachment signal</p>",
+            "</div>",
+            "<footer>KEMET1 BeforeAfter RF Classifier &middot; Sentinel-2 10m &middot; 2024&rarr;2025</footer>",
+            "</body></html>",
+        ])
+        out_html = OUT_DIR/(site_name+"_report.html")
+        out_html.write_text(no_enc_html, encoding="utf-8")
+        print(f"HTML (below threshold, RF={prob:.3f}): {out_html}")
+        return prob, 0, 0, 0
 
     clusters = find_clusters(d1, d2)
     total_ha = sum(c[4] for c in clusters)
     main_ha  = clusters[0][4] if clusters else 0.0
+    needs_verify = bool(clusters) and total_ha > 80.0  # >80 ha flagged for manual review
 
     img1, img2 = shared_rgb(d1, d2); ndiff = d2[0]-d1[0]
     BG = "#0d1117"
@@ -136,21 +167,20 @@ def run(before_path, after_path, site_name):
         ax1.add_patch(patches.Rectangle((c0,r0),c1-c0,r1-r0,lw=2 if i==0 else 1.2,
             edgecolor=clr,facecolor=clr+"22",ls="-" if i==0 else "--"))
         if i==0:
-            ax1.annotate("%.4f km2"%(ha*0.01),xy=(c0+(c1-c0)//2,r0-4),color="#ff6060",
+            ax1.annotate("%.1f ha"%ha,xy=(c0+(c1-c0)//2,r0-4),color="#ff6060",
                 fontsize=9,ha="center",va="bottom",fontweight="bold",
                 bbox=dict(boxstyle="round,pad=0.2",fc="#1a0000",ec="#ff3333",lw=1))
     ax1.set_xlabel("R=NDBI G=NDVI B=MNDWI 10m/px shared scale",color="#6e7681",fontsize=9)
     ax2 = fig.add_subplot(gs[2]); ax2.set_facecolor(BG)
-    vmax = max(abs(np.nanpercentile(ndiff,2)),abs(np.nanpercentile(ndiff,98)))
-    im = ax2.imshow(ndiff,cmap="RdYlGn",interpolation="nearest",vmin=-vmax,vmax=vmax)
+    im = ax2.imshow(ndiff,cmap="RdYlGn",interpolation="nearest",vmin=-0.5,vmax=0.5)
     for r0,r1,c0,c1,_ in clusters[:8]:
         ax2.add_patch(patches.Rectangle((c0,r0),c1-c0,r1-r0,lw=1.5,edgecolor="yellow",facecolor="none"))
     cb = fig.colorbar(im,ax=ax2,fraction=0.04,pad=0.02)
-    cb.ax.tick_params(colors="#aaa"); cb.set_label("dNDVI",color="#aaa",fontsize=9)
-    ax2.set_title("NDVI Difference (2024 to 2025)",color="#8ee3ff",fontsize=13,fontweight="bold",pad=6)
+    cb.ax.tick_params(colors="#aaa"); cb.set_label("ΔNDVI  ±0.5 shared scale",color="#aaa",fontsize=9)
+    ax2.set_title("ΔNDVI Raw Spectral Change (not RF output)",color="#e3a030",fontsize=11,fontweight="bold",pad=6)
     ax2.axis("off")
-    fig.suptitle("%s | RF: %.3f | Changed: %.3f km2 | Tile: %.3f km2 | Largest: %.3f km2"
-                 %(site_name,prob,total_ha*0.01,tile_ha*0.01,main_ha*0.01),color="#c9d1d9",fontsize=11,y=0.97)
+    fig.suptitle("%s | RF: %.3f | Changed: %.1f ha | Tile: %.1f ha | Largest: %.1f ha"
+                 %(site_name,prob,total_ha,tile_ha,main_ha),color="#c9d1d9",fontsize=11,y=0.97)
     out_png = OUT_DIR/(site_name+"_report.png")
     plt.savefig(out_png,dpi=140,bbox_inches="tight",facecolor=BG); plt.close()
     print("PNG:", out_png)
@@ -165,21 +195,21 @@ def run(before_path, after_path, site_name):
         clt = (lat_s+lat_n)/2; clo = (lon_w+lon_e)/2
         clr = "#ff3333" if i==0 else ("#ff6600" if i<3 else "#ffaa00")
         wt  = 2.5 if i==0 else 1.8
-        km2 = round(ha*0.01, 4)
+        ha_str = "%.1f ha" % ha
         bbox = "[[%.5f,%.5f],[%.5f,%.5f]]"%(lat_s,lon_w,lat_n,lon_e)
         js_rects.append(
             "_clayers[%d]=L.rectangle(%s,{color:'%s',weight:%.1f,"
             "dashArray:'5 3',fillColor:'%s',fillOpacity:0.18}).addTo(map);"
-            "_clayers[%d]._ha='%s km2';"
-            "_clayers[%d].bindPopup('Cluster #%d<br>%s km2<br>%.5fN %.5fE');"
-            % (i,bbox,clr,wt,clr,i,km2,i,i+1,km2,clt,clo)
+            "_clayers[%d]._ha='%s';"
+            "_clayers[%d].bindPopup('Cluster #%d<br>%s<br>%.5fN %.5fE');"
+            % (i,bbox,clr,wt,clr,i,ha_str,i,i+1,ha_str,clt,clo)
         )
         sidebar_rows.append(
             "<tr data-ci='%d' data-lat='%.5f' data-lon='%.5f'>"
             "<td>#%d</td><td>%.5fN</td><td>%.5fE</td>"
             "<td><span data-name='%d' style='color:#8ee3ff'>loading...</span></td>"
-            "<td>%s km2</td></tr>"
-            % (i,clt,clo,i+1,clt,clo,i,km2)
+            "<td>%s</td></tr>"
+            % (i,clt,clo,i+1,clt,clo,i,ha_str)
         )
 
     with open(out_png,"rb") as f: b64 = base64.b64encode(f.read()).decode()
@@ -192,10 +222,11 @@ def run(before_path, after_path, site_name):
         card("Verdict",label,sc,sm=True),
         card("Centre Lat","%.5fN"%clat,"#c9d1d9",sm=True),
         card("Centre Lon","%.5fE"%clon,"#c9d1d9",sm=True),
-        card("Total Area Lost","%.3f km2"%(total_ha*0.01),"#ff8c00"),
-        card("Largest Cluster","%.3f km2"%(main_ha*0.01)),
-        card("Tile Area","%.3f km2"%(tile_ha*0.01)),
+        card("Total Area Lost","%.1f ha"%total_ha,"#ff8c00"),
+        card("Largest Cluster","%.1f ha"%main_ha),
+        card("Tile Area","%.1f ha"%tile_ha),
         card("Change Clusters",str(len(clusters))),
+        card("&#x26A0; Verify","High-area — manual review required","#e3a030",sm=True) if needs_verify else "",
     ])
 
     map_script = (
@@ -208,12 +239,12 @@ def run(before_path, after_path, site_name):
           "var osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'OSM'});"
           "sat.addTo(map);"
         + "L.rectangle(%s,{color:'#3399ff',weight:2,fillOpacity:0.04,dashArray:'8 4'})"
-          ".addTo(map).bindPopup('Study tile %.3f km2');" % (mbbox, tile_ha*0.01)
+          ".addTo(map).bindPopup('Study tile %.1f ha');" % (mbbox, tile_ha)
         + cjs
         + "L.circleMarker([%.5f,%.5f],{radius:5,color:'%s',fillColor:'%s',fillOpacity:0.9,weight:2})"
           % (clat,clon,sc,sc)
-        + ".addTo(map).bindPopup('<b>%s</b><br>RF:%.3f<br>%s<br>Lost:%.3f km2');"
-          % (site_name,prob,label,total_ha*0.01)
+        + ".addTo(map).bindPopup('<b>%s</b><br>RF:%.3f<br>%s<br>Lost:%.1f ha');"
+          % (site_name,prob,label,total_ha)
         + "L.control.layers({'Satellite':sat,'Hybrid':hyb,'OSM':osm}).addTo(map);"
           "L.control.scale().addTo(map);"
     )
@@ -252,12 +283,17 @@ def run(before_path, after_path, site_name):
         "<style>"+css+"</style>",
         "</head><body>",
         "<h1>KEMET1 Encroachment Classifier - "+site_name+"</h1>",
+        ('<div style="background:#2d1800;border:1px solid #e3a030;border-radius:6px;'
+         'margin:0 24px 8px;padding:8px 16px;font-size:11px;color:#e3a030">'
+         '&#x26A0; <b>Requires Manual Verification</b> -- '
+         'detected area (%.1f ha) exceeds 15%% of tile (%.1f ha total)</div>' % (total_ha, tile_ha))
+        if needs_verify else "",
         '<div class="cards">'+cards_html+"</div>",
         '<div class="ms"><div id="map"></div>',
         '<div class="panel"><h3>Detected Change Areas</h3>',
         "<table><thead><tr><th>#</th><th>Lat</th><th>Lon</th><th>Location Name</th><th>Area</th></tr></thead>",
         "<tbody>"+stbl+"</tbody></table>",
-        '<div class="tot">Total lost: <b>%.3f km2</b> across %d clusters</div>' % (total_ha*0.01,len(clusters)),
+        '<div class="tot">Total lost: <b>%.1f ha</b> across %d clusters</div>' % (total_ha,len(clusters)),
         '<div class="leg">',
         '<div class="li"><div class="dot" style="border-color:#ff3333;background:#ff333330"></div>Largest cluster</div>',
         '<div class="li"><div class="dot" style="border-color:#ff6600;background:#ff660030"></div>2nd-3rd cluster</div>',

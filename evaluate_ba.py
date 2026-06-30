@@ -273,9 +273,9 @@ def build_eval_section(r):
 <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:24px">
   <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px">
     <label style="font-size:12px;color:#8ee3ff;white-space:nowrap">Decision threshold</label>
-    <input type="range" id="thSlider" min="0" max="90" value="35" step="1"
+    <input type="range" id="thSlider" min="0" max="90" value="24" step="1"
            style="flex:1;accent-color:#8ee3ff">
-    <span id="thVal" style="font-size:14px;font-weight:700;color:#8ee3ff;min-width:40px">0.40</span>
+    <span id="thVal" style="font-size:14px;font-weight:700;color:#8ee3ff;min-width:40px">0.29</span>
   </div>
   <div style="display:flex;gap:24px;flex-wrap:wrap" id="thMetrics">
     <div>Precision: <b id="mPrec">–</b></div>

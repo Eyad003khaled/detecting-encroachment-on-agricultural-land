@@ -124,18 +124,16 @@ def make_comparison(name: str, before_path: Path, after_path: Path, out_path: Pa
 
     # ── NDVI diff ───────────────────────────────────────────────
     ax2 = fig.add_subplot(gs[2]); ax2.set_facecolor(BG)
-    vmax = max(abs(np.nanpercentile(ndvi_diff, 5)),
-               abs(np.nanpercentile(ndvi_diff, 95)))
     im = ax2.imshow(ndvi_diff, cmap="RdYlGn", interpolation="nearest",
-                    vmin=-vmax, vmax=vmax)
+                    vmin=-0.5, vmax=0.5)
     ax2.add_patch(patches.Rectangle(
         (c0, r0), c1-c0, r1-r0,
         lw=2.5, edgecolor="yellow", facecolor="none"))
     cb = fig.colorbar(im, ax=ax2, fraction=0.04, pad=0.02)
     cb.ax.tick_params(colors="#aaa")
-    cb.set_label("ΔNDVI  (green=gain  red=loss)", color="#aaa", fontsize=9)
-    ax2.set_title(f"NDVI Difference  ({year_b}→{year_a})", color="#8ee3ff",
-                  fontsize=12, fontweight="bold", pad=6)
+    cb.set_label("ΔNDVI  ±0.5 shared scale  (green=gain  red=loss)", color="#aaa", fontsize=9)
+    ax2.set_title(f"ΔNDVI Raw Spectral Change ({year_b}→{year_a})\n⚠ Not RF-classified output",
+                  color="#e3a030", fontsize=10, fontweight="bold", pad=6)
     ax2.set_xticks([]); ax2.set_yticks([])
 
     plt.savefig(out_path, dpi=140, bbox_inches="tight", facecolor=BG)
