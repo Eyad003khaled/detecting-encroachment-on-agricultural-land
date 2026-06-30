@@ -60,7 +60,14 @@ def shared_rgb(d1: np.ndarray, d2: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def change_bbox(d1: np.ndarray, d2: np.ndarray):
-    """Return (r0,r1,c0,c1, cluster_ha) of main change cluster."""
+    """Return (r0,r1,c0,c1, cluster_ha) of main change cluster.
+
+    NOTE: Uses an *adaptive* threshold (mean + 1.5×std of a composite change score)
+    to find the largest change region for visualisation.  This is intentionally
+    different from find_clusters() in run_inference.py, which uses hardcoded
+    NDVI/NDBI pixel thresholds tied to the labelling rule.  Cluster areas from
+    this script are NOT equivalent to the ha figures in site HTML reports.
+    """
     cs     = -(d2[0] - d1[0]) + (d2[1] - d1[1])
     thresh = cs.mean() + 1.5 * cs.std()
     strong = (cs > thresh).astype(np.uint8)
@@ -186,7 +193,7 @@ def main():
         make_comparison(tile_name, before, after, out)
         generated.append(out)
 
-    print(f"\nDone — {len(generated)} comparison images in {args.out}")
+    print(f"\nDone -- {len(generated)} comparison images in {args.out}")
 
 
 if __name__ == "__main__":

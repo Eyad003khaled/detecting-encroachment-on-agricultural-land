@@ -1,6 +1,6 @@
 """run_inference.py - KEMET1 BeforeAfter encroachment report generator."""
 from __future__ import annotations
-import argparse, pickle, base64
+import argparse, pickle, base64, datetime
 from pathlib import Path
 import numpy as np, rasterio
 from rasterio.warp import transform_bounds
@@ -286,7 +286,7 @@ def run(before_path, after_path, site_name):
         ('<div style="background:#2d1800;border:1px solid #e3a030;border-radius:6px;'
          'margin:0 24px 8px;padding:8px 16px;font-size:11px;color:#e3a030">'
          '&#x26A0; <b>Requires Manual Verification</b> -- '
-         'detected area (%.1f ha) exceeds 15%% of tile (%.1f ha total)</div>' % (total_ha, tile_ha))
+         'detected area (%.1f ha) exceeds 80 ha threshold (tile: %.1f ha total)</div>' % (total_ha, tile_ha))
         if needs_verify else "",
         '<div class="cards">'+cards_html+"</div>",
         '<div class="ms"><div id="map"></div>',
@@ -303,7 +303,8 @@ def run(before_path, after_path, site_name):
         "<script>"+map_script+"</script>",
         "<script>"+GEOCODE_JS+"</script>",
         '<div class="iw"><img src="data:image/png;base64,'+b64+'" alt="Before/After"></div>',
-        "<footer>KEMET1 BeforeAfter RF Classifier - Sentinel-2 10m - Before=2024 After=2025</footer>",
+        "<footer>KEMET1 BeforeAfter RF Classifier · Sentinel-2 10m · Before=2024 After=2025 "
+        "· Alert threshold=%.2f · Generated %s UTC</footer>" % (ALERT_THRESHOLD, datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")),
         "</body></html>",
     ])
 
