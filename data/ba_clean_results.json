@@ -1,0 +1,35 @@
+{
+  "val_auc": 0.8611,
+  "test_auc": 0.8717,
+  "threshold": 0.23,
+  "precision": 0.3704,
+  "recall": 0.9091,
+  "cm": [
+    [
+      17,
+      17
+    ],
+    [
+      1,
+      10
+    ]
+  ],
+  "n_features": 44,
+  "baseline_pct_conv": {
+    "test_auc": 1.0,
+    "threshold": 0.021,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "cm": [
+      [
+        34,
+        0
+      ],
+      [
+        0,
+        11
+      ]
+    ]
+  }
+}

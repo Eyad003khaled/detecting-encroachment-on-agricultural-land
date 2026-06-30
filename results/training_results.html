@@ -90,26 +90,35 @@
 </head>
 <body>
 
-<h1>KEMET1 — Encroachment Classifier <span class="badge badge-green">v4 Final</span></h1>
+<h1>KEMET1 — Encroachment Classifier <span class="badge badge-green">v5 Clean</span></h1>
 <p class="subtitle">
-  Final model: <strong style="color:#4ade80;">RF depth=8 leaf=3 + t1_is_pos + temporal consistency</strong> ·
-  Pooled AUC 0.990 · Val/Test FP=3 FN=0
+  Final model: <strong style="color:#4ade80;">RF depth=8 leaf=3 · 44 spectral-delta features · no circular features</strong> ·
+  Val AUC 0.861 · Test AUC 0.872
 </p>
 
 <!-- Key metrics row -->
 <div class="summary-row">
-  <div class="chip highlight"><div class="val" style="color:#4ade80;">0.963</div><div class="lbl">Val AUC — primary metric</div></div>
-  <div class="chip highlight"><div class="val" style="color:#4ade80;">1.000</div><div class="lbl">Test Recall — zero FN</div></div>
-  <div class="chip"><div class="val">3</div><div class="lbl">FP per split (val &amp; test)</div></div>
-  <div class="chip"><div class="val">0.29</div><div class="lbl">Optimal threshold (F2)</div></div>
-  <div class="chip"><div class="val" style="color:#fbbf24;">0.988</div><div class="lbl">Test AUC ⚠ inflated</div></div>
-  <div class="chip"><div class="val" style="color:#888;">0.990</div><div class="lbl">Pooled AUC (inflated)</div></div>
+  <div class="chip highlight"><div class="val" style="color:#4ade80;">0.861</div><div class="lbl">Val AUC (clean model)</div></div>
+  <div class="chip highlight"><div class="val" style="color:#4ade80;">0.872</div><div class="lbl">Test AUC (clean model)</div></div>
+  <div class="chip"><div class="val" style="color:#fbbf24;">0.909</div><div class="lbl">Test Recall</div></div>
+  <div class="chip"><div class="val" style="color:#f87171;">0.370</div><div class="lbl">Test Precision</div></div>
+  <div class="chip"><div class="val">0.23</div><div class="lbl">Optimal threshold (F2)</div></div>
+  <div class="chip"><div class="val" style="color:#888;font-size:1rem;">1.000</div><div class="lbl">pct_conv-alone AUC (baseline)</div></div>
 </div>
-<p style="font-size:0.75rem;color:#f87171;background:#2a1a1a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 14px;margin-bottom:16px;">
-  ⚠ <strong>Test AUC 0.988 and Pooled AUC 0.990 are inflated</strong> due to label–feature circularity:
-  <code>pct_conv</code> and <code>max_cluster_ha</code> are used both to define labels <em>and</em> as input features.
-  <strong>Val AUC 0.963 is the conservative estimate; use it as the primary metric.</strong>
+<p style="font-size:0.75rem;color:#f87171;background:#2a1a1a;border:1px solid #7f1d1d;border-radius:6px;padding:8px 14px;margin-bottom:8px;">
+  <strong>Circular features removed.</strong> Previous v4 model included <code>pct_conv</code> and <code>pct_new</code> — both derived
+  from the same spectral threshold used to generate labels. The baseline (pct_conv alone) achieves AUC=1.000 on the test set,
+  proving the original labels were perfectly predicted by a single feature. v5 removes both and uses 44 spectral-delta features only.
+  Honest Val AUC drops from 0.963 to 0.861.
 </p>
+<div style="background:#1a1d27;border:1px solid #2a2d3a;border-radius:8px;padding:12px 18px;margin-bottom:16px;font-size:0.78rem;">
+  <strong style="color:#8ee3ff;">Baseline comparison (pct_conv threshold only):</strong>
+  <span style="margin-left:12px;color:#fbbf24;">AUC 1.000</span>
+  <span style="margin-left:12px;color:#aaa;">Prec 1.000</span>
+  <span style="margin-left:12px;color:#aaa;">Rec 1.000</span>
+  <span style="margin-left:12px;color:#6e7681;">threshold=0.021 &mdash; single-feature rule perfectly replicates labels,
+  confirming label-feature circularity in prior versions.</span>
+</div>
 
 <!-- Improvement timeline -->
 <section-hdr>Model Evolution</section-hdr>
@@ -574,23 +583,4 @@ new Chart(document.getElementById('cmChart'),{type:'bar',data:{
 // Threshold slider
 var sl=document.getElementById('thSlider');
 function updateSlider(){
-  var idx=parseInt(sl.value);
-  var row=sweep[idx];
-  document.getElementById('thVal').textContent=row.threshold.toFixed(2);
-  document.getElementById('mPrec').textContent=row.precision.toFixed(3);
-  document.getElementById('mRec').textContent=row.recall.toFixed(3);
-  document.getElementById('mF1').textContent=row.f1.toFixed(3);
-  document.getElementById('mAcc').textContent=row.accuracy.toFixed(3);
-  document.getElementById('mTP').textContent=row.cm[1][1];
-  document.getElementById('mFP').textContent=row.cm[0][1];
-  document.getElementById('mFN').textContent=row.cm[1][0];
-  document.getElementById('mTN').textContent=row.cm[0][0];
-}
-sl.addEventListener('input',updateSlider);
-updateSlider();
-})();
-</script>
-</div>
-<!-- BA_EVAL_SECTION -->
-</body>
-</html>
+  va

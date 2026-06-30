@@ -23,11 +23,11 @@ def extract_stats(arr):
     return np.array(feats)
 
 def pair_features(d1, d2):
+    """44 spectral-delta features. pct_conv and pct_new removed (circular with labels)."""
     fd = extract_stats(d2 - d1)
-    ndvi1, ndbi1 = d1[0], d1[1]; ndvi2, ndbi2 = d2[0], d2[1]
-    pct_conv = float(((ndvi1>0.25)&(ndvi2<0.25)&(ndbi2>ndbi1+0.08)).mean())
-    pct_new  = float(((ndbi2>0.15)&((ndbi2-ndbi1)>0.10)).mean())
-    return np.concatenate([fd,[float(np.nanmean(ndvi2-ndvi1)),float(np.nanmean(ndbi2-ndbi1)),pct_conv,pct_new]])
+    ndvi2, ndbi2 = d2[0], d2[1]; ndvi1, ndbi1 = d1[0], d1[1]
+    return np.concatenate([fd, [float(np.nanmean(ndvi2-ndvi1)),
+                                float(np.nanmean(ndbi2-ndbi1))]])
 
 def shared_rgb(d1, d2):
     imgs = []
@@ -114,7 +114,10 @@ def run(before_path, after_path, site_name):
     bundle = pickle.load(open(MODEL_PATH,"rb"))
     feat = np.nan_to_num(pair_features(d1,d2), nan=0.0).reshape(1,-1)
     prob = float(bundle["model"].predict_proba(feat)[0,1])
-    ALERT_THRESHOLD = 0.40
+    ALERT_THRESHOLD  = 0.40   # gate: below this → no-encroachment report
+    VERIFY_AREA_HA   = 80.0   # flag if total cluster area > 80 ha
+    VERIFY_CONF_HA   = 40.0   # flag if area > 40 ha AND RF confidence is marginal
+    VERIFY_CONF_CEIL = 0.60   # "marginal" = RF < 0.60
     label = "ENCROACHMENT DETECTED" if prob>=ALERT_THRESHOLD else "No encroachment"
     sc = "#ff4444" if prob>=ALERT_THRESHOLD else "#44ff88"
 
@@ -139,7 +142,8 @@ def run(before_path, after_path, site_name):
             "<div class='lbl'>RF Score</div></div>",
             "<p style='margin-top:20px;font-size:11px;color:#6e7681'>Full report suppressed &mdash; no significant encroachment signal</p>",
             "</div>",
-            "<footer>KEMET1 BeforeAfter RF Classifier &middot; Sentinel-2 10m &middot; 2024&rarr;2025</footer>",
+            "<footer>KEMET1 BeforeAfter RF Classifier &middot; Sentinel-2 10m &middot; 2024&rarr;2025 "
+        "&middot; No SCL cloud masking applied &mdash; verify cloud-free acquisition</footer>",
             "</body></html>",
         ])
         out_html = OUT_DIR/(site_name+"_report.html")
@@ -150,7 +154,11 @@ def run(before_path, after_path, site_name):
     clusters = find_clusters(d1, d2)
     total_ha = sum(c[4] for c in clusters)
     main_ha  = clusters[0][4] if clusters else 0.0
-    needs_verify = bool(clusters) and total_ha > 80.0  # >80 ha flagged for manual review
+    # Flag for manual review: large area OR low-confidence with moderate area
+    needs_verify = bool(clusters) and (
+        total_ha > VERIFY_AREA_HA or
+        (prob < VERIFY_CONF_CEIL and total_ha > VERIFY_CONF_HA)
+    )
 
     img1, img2 = shared_rgb(d1, d2); ndiff = d2[0]-d1[0]
     BG = "#0d1117"
@@ -304,7 +312,7 @@ def run(before_path, after_path, site_name):
         "<script>"+GEOCODE_JS+"</script>",
         '<div class="iw"><img src="data:image/png;base64,'+b64+'" alt="Before/After"></div>',
         "<footer>KEMET1 BeforeAfter RF Classifier · Sentinel-2 10m · Before=2024 After=2025 "
-        "· Alert threshold=%.2f · Generated %s UTC</footer>" % (ALERT_THRESHOLD, datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")),
+        "Alert threshold=%.2f &middot; No SCL cloud masking applied &middot; Generated %s UTC</footer>" % (ALERT_THRESHOLD, datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")),
         "</body></html>",
     ])
 

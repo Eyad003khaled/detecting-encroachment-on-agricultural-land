@@ -39,13 +39,11 @@ def extract_stats(arr):
     return np.array(feats)
 
 def pair_features(d1, d2):
+    """44 features — pct_conv and pct_new removed (circular with labels)."""
     fd = extract_stats(d2 - d1)
-    ndvi1, ndbi1 = d1[0], d1[1]; ndvi2, ndbi2 = d2[0], d2[1]
-    pct_conv = float(((ndvi1>0.25)&(ndvi2<0.25)&(ndbi2>ndbi1+0.08)).mean())
-    pct_new  = float(((ndbi2>0.15)&((ndbi2-ndbi1)>0.10)).mean())
+    ndvi2, ndbi2 = d2[0], d2[1]; ndvi1, ndbi1 = d1[0], d1[1]
     return np.concatenate([fd, [float(np.nanmean(ndvi2-ndvi1)),
-                                float(np.nanmean(ndbi2-ndbi1)),
-                                pct_conv, pct_new]])
+                                float(np.nanmean(ndbi2-ndbi1))]])
 
 def extract_all(records):
     X, y, sites = [], [], []
