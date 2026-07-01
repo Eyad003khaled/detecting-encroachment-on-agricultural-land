@@ -118,7 +118,7 @@ def run(before_path, after_path, site_name):
     VERIFY_AREA_HA   = 80.0   # flag if total cluster area > 80 ha
     VERIFY_CONF_HA   = 40.0   # flag if area > 40 ha AND RF confidence is marginal
     VERIFY_CONF_CEIL = 0.60   # "marginal" = RF < 0.60
-    label = "ENCROACHMENT DETECTED" if prob>=ALERT_THRESHOLD else "No encroachment"
+    label = "Suspected encroachment (screening alert)" if prob>=ALERT_THRESHOLD else "No encroachment signal"
     sc = "#ff4444" if prob>=ALERT_THRESHOLD else "#44ff88"
 
     if prob < ALERT_THRESHOLD:
@@ -290,7 +290,7 @@ def run(before_path, after_path, site_name):
         "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></script>",
         "<style>"+css+"</style>",
         "</head><body>",
-        "<h1>KEMET1 Encroachment Classifier - "+site_name+"</h1>",
+        "<h1>KEMET1 Screening Alert &mdash; "+site_name+"</h1>",
         ('<div style="background:#2d1800;border:1px solid #e3a030;border-radius:6px;'
          'margin:0 24px 8px;padding:8px 16px;font-size:11px;color:#e3a030">'
          '&#x26A0; <b>Requires Manual Verification</b> -- '
@@ -341,5 +341,4 @@ def main():
             print("\n"+"="*60+"\n"+sn)
             run(BA_DIR/(sn+"_before_2024.tif"), BA_DIR/(sn+"_after_2025.tif"), sn)
 
-if __name__ == "__main__":
-    main()
+if __name__ ==
