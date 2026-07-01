@@ -111,6 +111,12 @@ def run(before_path, after_path, site_name):
         d2 = s.read().astype(np.float32)
     clat = (wgs[1]+wgs[3])/2; clon = (wgs[0]+wgs[2])/2
 
+    # Parse acquisition years from filenames (e.g. site3_before_2024.tif → "2024")
+    _by = Path(before_path).stem.split("_")[-1]
+    _ay = Path(after_path).stem.split("_")[-1]
+    before_year = _by if _by.isdigit() else "before"
+    after_year  = _ay if _ay.isdigit() else "after"
+
     bundle = pickle.load(open(MODEL_PATH,"rb"))
     feat = np.nan_to_num(pair_features(d1,d2), nan=0.0).reshape(1,-1)
     prob = float(bundle["model"].predict_proba(feat)[0,1])
@@ -163,13 +169,14 @@ def run(before_path, after_path, site_name):
             "<h1 style='color:#44ff88;font-size:1.5rem;margin-bottom:6px'>No Encroachment Detected</h1>",
             "<p style='color:#6e7681;font-size:0.85rem;margin-bottom:0'>%s &middot; Fusion score %.3f below yellow threshold (%.2f)</p>" % (site_name, fusion_score, YELLOW_THRESHOLD),
             "<div class='box'><div class='score'>%.3f</div>" % fusion_score,
-            "<div class='lbl'>Fusion Score (RF×0.65 + Spectral×0.35)</div></div>",
+            "<div class='lbl'>Fusion Score (RF&times;0.65 + Spectral&dagger;&times;0.35)</div></div>",
             "<div class='box' style='margin-top:8px'><div class='score' style='font-size:1.1rem'>RF %.3f &nbsp;&nbsp; Spec %.3f</div>" % (prob, spectral_score),
             "<div class='lbl'>Component Scores</div></div>",
             "<p style='margin-top:20px;font-size:11px;color:#6e7681'>Full report suppressed &mdash; no significant encroachment signal</p>",
             "</div>",
-            "<footer>KEMET1 BeforeAfter RF Classifier &middot; Sentinel-2 10m &middot; 2024&rarr;2025 "
-        "&middot; No SCL cloud masking applied &mdash; verify cloud-free acquisition</footer>",
+            "<footer>KEMET1 BeforeAfter RF Classifier &middot; Sentinel-2 10m"
+        " &middot; %s&rarr;%s"
+        " &middot; No SCL cloud masking applied &mdash; verify cloud-free acquisition</footer>" % (before_year, after_year),
             "</body></html>",
         ])
         out_html = OUT_DIR/(site_name+"_report.html")
@@ -192,10 +199,10 @@ def run(before_path, after_path, site_name):
     gs = GridSpec(1,3,figure=fig,wspace=0.04,left=0.02,right=0.98,top=0.88,bottom=0.08)
     ax0 = fig.add_subplot(gs[0]); ax0.set_facecolor(BG)
     ax0.imshow(img1,interpolation="nearest")
-    ax0.set_title("BEFORE (2024)",color="#8ee3ff",fontsize=13,fontweight="bold",pad=6); ax0.axis("off")
+    ax0.set_title("BEFORE (%s)"%before_year,color="#8ee3ff",fontsize=13,fontweight="bold",pad=6); ax0.axis("off")
     ax1 = fig.add_subplot(gs[1]); ax1.set_facecolor(BG)
     ax1.imshow(img2,interpolation="nearest")
-    ax1.set_title("AFTER (2025) - "+label,color=sc,fontsize=13,fontweight="bold",pad=6); ax1.axis("off")
+    ax1.set_title("AFTER (%s) - "%after_year+label,color=sc,fontsize=13,fontweight="bold",pad=6); ax1.axis("off")
     for i,(r0,r1,c0,c1,ha) in enumerate(clusters[:8]):
         clr="#ff3333" if i==0 else "#ff9900"
         ax1.add_patch(patches.Rectangle((c0,r0),c1-c0,r1-r0,lw=2 if i==0 else 1.2,
@@ -254,7 +261,7 @@ def run(before_path, after_path, site_name):
     cards_html = "".join([
         card("Fusion Score","%.3f"%fusion_score,sc),
         card("RF Score (×0.65)","%.3f"%prob,"#8ee3ff"),
-        card("Spectral Score (×0.35)","%.3f"%spectral_score,"#8ee3ff"),
+        card("Spectral Score &times;0.35&dagger;","%.3f"%spectral_score,"#8ee3ff"),
         card("Alarm Level",label,sc,sm=True),
         card("Centre Lat","%.5fN"%clat,"#c9d1d9",sm=True),
         card("Centre Lon","%.5fE"%clon,"#c9d1d9",sm=True),
@@ -333,6 +340,10 @@ def run(before_path, after_path, site_name):
          'detected area (%.1f ha) exceeds 80 ha threshold (tile: %.1f ha total)</div>' % (total_ha, tile_ha))
         if needs_verify else "",
         '<div class="cards">'+cards_html+"</div>",
+        '<p style="margin:0 24px 8px;font-size:10px;color:#6e7681">'
+        '&dagger; Spectral score = clip((&minus;&Delta;&macr;NDVI+&Delta;&macr;NDBI)&times;1.5, 0, 1)'
+        ' using feat[42&ndash;43] &mdash; these features are already inside the RF &mdash;'
+        ' spectral signal is <em>confirmatory</em>, not independent from the RF.</p>',
         '<div class="ms"><div id="map"></div>',
         '<div class="panel"><h3>Detected Change Areas</h3>',
         "<table><thead><tr><th>#</th><th>Lat</th><th>Lon</th><th>Location Name</th><th>Area</th></tr></thead>",
@@ -347,10 +358,12 @@ def run(before_path, after_path, site_name):
         "<script>"+map_script+"</script>",
         "<script>"+GEOCODE_JS+"</script>",
         '<div class="iw"><img src="data:image/png;base64,'+b64+'" alt="Before/After"></div>',
-        "<footer>KEMET1 BeforeAfter RF Classifier &middot; Sentinel-2 10m &middot; Before=2024 After=2025 "
-        "&middot; Yellow&ge;%.2f / Red&ge;%.2f (Fusion=RF&times;0.65+Spectral&times;0.35) "
-        "&middot; No SCL cloud masking &middot; %s UTC</footer>"
-        % (YELLOW_THRESHOLD, ALERT_THRESHOLD, datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")),
+        "<footer>KEMET1 BeforeAfter RF Classifier &middot; Sentinel-2 10m"
+        " &middot; Before=%s After=%s &middot; Yellow&ge;%.2f / Red&ge;%.2f"
+        " (Fusion=RF&times;0.65+Spectral&dagger;&times;0.35)"
+        " &middot; &dagger;Spectral=clip((-&Delta;NDVI+&Delta;NDBI)&times;1.5,0,1) confirmatory reuse of RF feat[42&ndash;43]"
+        " &middot; No SCL cloud masking &middot; %s UTC</footer>"
+        % (before_year, after_year, YELLOW_THRESHOLD, ALERT_THRESHOLD, datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")),
         "</body></html>",
     ])
 

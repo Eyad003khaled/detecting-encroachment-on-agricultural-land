@@ -184,10 +184,10 @@
   </div>
   <div class="tl-card active">
     <div class="tl-step">v5 Final &mdash; current model</div>
-    <div class="tl-name">depth=8  leaf=3  Platt-cal</div>
+    <div class="tl-name">depth=8  leaf=3  Platt-cal*</div>
     <div class="tl-auc" style="color:#4ade80;">0.861</div>
     <div class="tl-fp" style="color:#4ade80;">Geo AUC 0.702</div>
-    <p style="font-size:0.7rem;color:#555;margin-top:6px;">Bootstrap 95% CI [0.74, 0.96]. Geographic holdout validates spatial generalisation. Platt calibration in bundle.</p>
+    <p style="font-size:0.7rem;color:#555;margin-top:6px;">Bootstrap 95% CI [0.74, 0.96]. Geographic holdout validates spatial generalisation. Platt calibration in bundle. *<b>Note:</b> <code>bundle["calibrated_model"]</code> (Platt-scaled) is stored but <code>run_inference.py</code> uses <code>bundle["model"]</code> (raw RF). Threshold 0.23 was tuned on raw RF output &mdash; switching to the calibrated model would require re-deriving the threshold.</p>
   </div>
 </div>
 
