@@ -360,4 +360,27 @@ function updateSlider(){{
   document.getElementById('thVal').textContent=row.threshold.toFixed(2);
   document.getElementById('mPrec').textContent=row.precision.toFixed(3);
   document.getElementById('mRec').textContent=row.recall.toFixed(3);
-  document.g
+  document.getElementById('mF1').textContent=row.f1.toFixed(3);
+  document.getElementById('mAcc').textContent=row.accuracy.toFixed(3);
+  document.getElementById('mTP').textContent=row.cm[1][1];
+  document.getElementById('mFP').textContent=row.cm[0][1];
+  document.getElementById('mFN').textContent=row.cm[1][0];
+  document.getElementById('mTN').textContent=row.cm[0][0];
+}}
+sl.addEventListener('input',updateSlider);
+updateSlider();
+}})();
+</script>
+</div>
+"""
+
+def _kpi(label, value, color):
+    return (f'<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;'
+            f'padding:12px 18px;min-width:110px">'
+            f'<div style="font-size:10px;color:#6e7681;text-transform:uppercase;'
+            f'letter-spacing:.06em;margin-bottom:3px">{label}</div>'
+            f'<div style="font-size:1.5rem;font-weight:700;color:{color}">{value}</div></div>')
+
+
+if __name__ == "__main__":
+    main()

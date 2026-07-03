@@ -395,4 +395,7 @@ def main():
         for r in [x for x in labels if x["label"]=="pos"][:5]:
             sn = r["site"]
             print("\n"+"="*60+"\n"+sn)
-            run(BA_DIR/(sn
+            run(BA_DIR/(sn+"_before_2024.tif"), BA_DIR/(sn+"_after_2025.tif"), sn)
+
+if __name__ == "__main__":
+    main()

@@ -126,4 +126,21 @@ results/
   viz/                     # Sample site imagery and change maps
 docs/
   KEMET1_Final_Report.pdf  # Full GP report
-  GP
+  GP_Presentation.pptx     # Defence presentation
+  KEMET1_Technical_Documentation.docx  # Canonical technical doc
+  datasets_reference.md    # Dataset sources and notes
+upload_case.py             # Upload one site to backend API
+batch_upload.py            # Batch-upload all 78 positive sites
+run_inference.py           # Core BA inference engine (HTML reports + JSON)
+batch_report.py            # Regenerate all 78 site HTML reports
+```
+
+---
+
+## Requirements
+
+**BA inference (what actually runs):** `rasterio, numpy, scikit-learn, scipy, matplotlib, folium, requests, fpdf2`
+
+**Full pipeline (steps 01–08, optional):** additionally requires `torch, transformers, ultralytics, segment-anything, segmentation-models-pytorch, earthengine-api`
+
+See `requirements.txt` for pinned versions. The DL stack is listed under a separate comment block and can be skipped if only running BA inference.

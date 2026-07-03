@@ -86,4 +86,12 @@ def _run_changeformer(
 
 def _difference_fallback(
     t1: np.ndarray, t2: np.ndarray
-) -> tup
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Simple mean-absolute-difference fallback when ChangeFormer weights are absent.
+    Normalised to [0,1]; threshold applied to create binary mask.
+    """
+    diff = np.abs(t2 - t1).mean(axis=0)
+    confidence = diff / (diff.max() + 1e-8)
+    mask = (confidence > CFG["threshold"]).astype(np.uint8)
+    return mask, confidence.astype(np.float32)

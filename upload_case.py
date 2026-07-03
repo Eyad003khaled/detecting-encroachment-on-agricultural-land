@@ -190,4 +190,4 @@ if __name__ == "__main__":
     parser.add_argument("site", help="Site name e.g. site0")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-  
+    run(args.site, dry_run=args.dry_run)

@@ -215,4 +215,8 @@ def main():
     print(f"\n{'='*50}")
     print(f"Done: {len(results)} submitted, {len(failed)} failed")
     if failed:
-        print(f"Failed sites: {[f['site'] for f in 
+        print(f"Failed sites: {[f['site'] for f in failed]}")
+    print(f"Log saved: {log}")
+
+if __name__ == "__main__":
+    main()
