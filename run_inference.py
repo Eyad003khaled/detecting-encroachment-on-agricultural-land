@@ -9,9 +9,10 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt, matplotlib.patches as patches
 from matplotlib.gridspec import GridSpec
 
-BA_DIR           = Path("data/KEMET1_BeforeAfter/KEMET1_BeforeAfter_Tiles")
-MODEL_PATH       = Path("models/ba_rf_model.pkl")
-OUT_DIR          = Path("outputs"); OUT_DIR.mkdir(exist_ok=True)
+_ROOT            = Path(__file__).parent
+BA_DIR           = _ROOT / "data/KEMET1_BeforeAfter/KEMET1_BeforeAfter_Tiles"
+MODEL_PATH       = _ROOT / "models/ba_rf_model.pkl"
+OUT_DIR          = _ROOT / "outputs"; OUT_DIR.mkdir(exist_ok=True)
 
 YELLOW_THRESHOLD = 0.30
 ALERT_THRESHOLD  = 0.40
@@ -393,7 +394,4 @@ def main():
         for r in [x for x in labels if x["label"]=="pos"][:5]:
             sn = r["site"]
             print("\n"+"="*60+"\n"+sn)
-            run(BA_DIR/(sn+"_before_2024.tif"), BA_DIR/(sn+"_after_2025.tif"), sn)
-
-if __name__ == "__main__":
-    main()
+            run(BA_DIR/(sn+"_before_2024.tif"), BA_DIR/(sn+"_after_2025.tif
