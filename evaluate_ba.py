@@ -63,9 +63,23 @@ def extract_all(records):
     return np.array(X), np.array(y), sites
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+def bootstrap_auc(y_true, y_scores, n_boot=1000, seed=42):
+    """95% CI for AUC via bootstrap resampling."""
+    rng  = np.random.default_rng(seed)
+    aucs = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, len(y_true), size=len(y_true))
+        yb, sb = y_true[idx], y_scores[idx]
+        if len(np.unique(yb)) < 2:
+            continue
+        aucs.append(roc_auc_score(yb, sb))
+    aucs = np.array(aucs)
+    return round(float(np.percentile(aucs, 2.5)), 4), round(float(np.percentile(aucs, 97.5)), 4)
+
+
 def main():
     bundle = pickle.load(open(MODEL_PATH, "rb"))
-    clf    = bundle["model"]
+    clf    = bundle.get("calibrated_model") or bundle["model"]   # prefer Platt-calibrated
     imp    = bundle["imputer"]
     stored = bundle.get("results", {})
 
@@ -116,6 +130,10 @@ def main():
     auc_val  = roc_auc_score(y_val,  probs_val)
     auc_test = roc_auc_score(y_test, probs_test)
 
+    # Bootstrap 95% CI on val AUC
+    ci_lo, ci_hi = bootstrap_auc(y_val, probs_val)
+    print(f"\nVal AUC bootstrap 95% CI: [{ci_lo:.4f}, {ci_hi:.4f}]")
+
     # PR curves
     prec_v, rec_v, thr_pv = precision_recall_curve(y_val,  probs_val)
     prec_t, rec_t, thr_pt = precision_recall_curve(y_test, probs_test)
@@ -152,7 +170,9 @@ def main():
         "n_val":   int(len(y_val)),
         "n_test":  int(len(y_test)),
         "val": {
-            "auc":  round(auc_val, 4),
+            "auc":    round(auc_val, 4),
+            "ci_lo":  ci_lo,
+            "ci_hi":  ci_hi,
             "fpr":  [round(float(x),4) for x in fpr_v],
             "tpr":  [round(float(x),4) for x in tpr_v],
             "prec": [round(float(x),4) for x in prec_v],
@@ -251,7 +271,7 @@ def build_eval_section(r):
 
 <!-- KPI row -->
 <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px">
-  {_kpi("Val AUC ★", f"{val['auc']:.4f}", "#44ff88")}
+  {_kpi("Val AUC ★", f"{val['auc']:.4f}<br><small style='font-size:10px;color:#888'>95% CI [{val.get('ci_lo','–')}, {val.get('ci_hi','–')}]</small>", "#44ff88")}
   {_kpi("Test AUC†", f"{test['auc']:.4f}", "#8ee3ff")}
   {_kpi("Precision", f"{test['op_precision']:.3f}", "#ff8c00")}
   {_kpi("Recall",    f"{test['op_recall']:.3f}",    "#ff8c00")}
@@ -340,27 +360,4 @@ function updateSlider(){{
   document.getElementById('thVal').textContent=row.threshold.toFixed(2);
   document.getElementById('mPrec').textContent=row.precision.toFixed(3);
   document.getElementById('mRec').textContent=row.recall.toFixed(3);
-  document.getElementById('mF1').textContent=row.f1.toFixed(3);
-  document.getElementById('mAcc').textContent=row.accuracy.toFixed(3);
-  document.getElementById('mTP').textContent=row.cm[1][1];
-  document.getElementById('mFP').textContent=row.cm[0][1];
-  document.getElementById('mFN').textContent=row.cm[1][0];
-  document.getElementById('mTN').textContent=row.cm[0][0];
-}}
-sl.addEventListener('input',updateSlider);
-updateSlider();
-}})();
-</script>
-</div>
-"""
-
-def _kpi(label, value, color):
-    return (f'<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;'
-            f'padding:12px 18px;min-width:110px">'
-            f'<div style="font-size:10px;color:#6e7681;text-transform:uppercase;'
-            f'letter-spacing:.06em;margin-bottom:3px">{label}</div>'
-            f'<div style="font-size:1.5rem;font-weight:700;color:{color}">{value}</div></div>')
-
-
-if __name__ == "__main__":
-    main()
+  document.g

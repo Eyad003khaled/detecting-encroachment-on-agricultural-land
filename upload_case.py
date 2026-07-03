@@ -127,10 +127,11 @@ def run(site: str, dry_run: bool = False):
 
     print("[2/5] Running RF inference...")
     bundle = pickle.load(open(MODEL_PATH, "rb"))
-    rf = bundle["model"]; scaler = bundle.get("scaler")
+    clf = bundle.get("calibrated_model") or bundle["model"]
+    scaler = bundle.get("scaler")
     feats = pair_features(d1, d2).reshape(1,-1)
     if scaler: feats = scaler.transform(feats)
-    prob = float(rf.predict_proba(feats)[0,1])
+    prob = float(clf.predict_proba(feats)[0,1])
     spec = float(np.nanmean(np.maximum(d1[0]-d2[0], 0)))
     fusion = round(0.65*prob + 0.35*spec, 4)
     alarm = "High" if fusion >= ALERT_THRESHOLD else ("Medium" if fusion >= YELLOW_THRESHOLD else "Low")
@@ -189,4 +190,4 @@ if __name__ == "__main__":
     parser.add_argument("site", help="Site name e.g. site0")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    run(args.site, dry_run=args.dry_run)
+  

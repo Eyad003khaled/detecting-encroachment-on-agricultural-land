@@ -123,7 +123,8 @@ def run(before_path, after_path, site_name):
 
     bundle = pickle.load(open(MODEL_PATH,"rb"))
     feat = np.nan_to_num(pair_features(d1,d2), nan=0.0).reshape(1,-1)
-    prob = float(bundle["model"].predict_proba(feat)[0,1])
+    clf  = bundle.get("calibrated_model") or bundle["model"]
+    prob = float(clf.predict_proba(feat)[0,1])
 
     # ── Signal 2: spectral composite score (tile-level) ─────────────────────────
     # Uses feat[42]=mean_dNDVI and feat[43]=mean_dNDBI (tile averages).
@@ -394,4 +395,4 @@ def main():
         for r in [x for x in labels if x["label"]=="pos"][:5]:
             sn = r["site"]
             print("\n"+"="*60+"\n"+sn)
-            run(BA_DIR/(sn+"_before_2024.tif"), BA_DIR/(sn+"_after_2025.tif
+            run(BA_DIR/(sn
