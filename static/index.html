@@ -70,12 +70,10 @@
     @media (max-width: 600px) { .upload-grid { grid-template-columns: 1fr; } }
 
     .drop-zone {
-      position: relative;
       border: 2px dashed var(--border);
       border-radius: var(--radius);
       padding: 2rem 1rem;
       text-align: center;
-      cursor: pointer;
       transition: border-color .2s, background .2s;
       min-height: 160px;
       display: flex;
@@ -84,28 +82,23 @@
       justify-content: center;
       gap: .5rem;
     }
-    .drop-zone:hover, .drop-zone.over { border-color: var(--orange); background: rgba(255,107,0,.05); }
-    .drop-zone.ready { border-color: var(--accent); background: rgba(35,134,54,.05); }
-    .drop-zone input[type="file"] { display: none; }
-    .drop-zone { cursor: pointer; }
-    .drop-icon { font-size: 2rem; }
+    .drop-zone.over   { border-color: var(--orange); background: rgba(255,107,0,.05); }
+    .drop-zone.ready  { border-color: var(--accent);  background: rgba(35,134,54,.05); }
+    .drop-icon  { font-size: 2rem; }
     .drop-label { font-weight: 600; font-size: .95rem; }
-    .drop-sub { font-size: .8rem; color: var(--muted); }
-    .file-name {
-      font-size: .8rem; color: var(--accent); margin-top: .3rem;
-      word-break: break-all;
-    }
+    .drop-sub   { font-size: .8rem; color: var(--muted); }
+    .file-name  { font-size: .8rem; color: var(--accent); margin-top: .2rem; word-break: break-all; }
     .browse-btn {
-      display: inline-block;
       margin-top: .5rem;
-      padding: .3rem .9rem;
-      background: transparent;
+      padding: .35rem 1rem;
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 6px;
-      color: var(--muted);
-      font-size: .8rem;
+      color: var(--text);
+      font-size: .85rem;
       cursor: pointer;
     }
+    .browse-btn:hover { border-color: var(--orange); }
 
     /* ── Button ── */
     .btn {
@@ -280,23 +273,25 @@
   <span class="api-status" id="api-status"></span>
 </div>
 
+<!-- Hidden file inputs — kept outside drop zones to avoid all click conflicts -->
+<input type="file" id="file-before" style="display:none" />
+<input type="file" id="file-after"  style="display:none" />
+
 <!-- Upload -->
 <div class="upload-grid">
-  <div class="drop-zone" id="drop-before" onclick="document.getElementById('file-before').click()">
-    <input type="file" id="file-before" accept=".tif,.tiff" />
+  <div class="drop-zone" id="drop-before">
     <span class="drop-icon">🛰️</span>
     <span class="drop-label">Before Image</span>
     <span class="drop-sub">6-band Sentinel-2 TIF (2024)</span>
+    <button type="button" class="browse-btn" id="btn-before">Browse file…</button>
     <span class="file-name" id="name-before"></span>
-    <span class="browse-btn">Browse file…</span>
   </div>
-  <div class="drop-zone" id="drop-after" onclick="document.getElementById('file-after').click()">
-    <input type="file" id="file-after" accept=".tif,.tiff" />
+  <div class="drop-zone" id="drop-after">
     <span class="drop-icon">📡</span>
     <span class="drop-label">After Image</span>
     <span class="drop-sub">6-band Sentinel-2 TIF (2025)</span>
+    <button type="button" class="browse-btn" id="btn-after">Browse file…</button>
     <span class="file-name" id="name-after"></span>
-    <span class="browse-btn">Browse file…</span>
   </div>
 </div>
 
@@ -370,7 +365,7 @@
   async function pingServer() {
     apiStatus.className = 'api-status'; apiStatus.textContent = 'checking…';
     try {
-      const r = await fetch(apiBase() + '/docs', { method: 'HEAD', mode: 'no-cors' });
+      await fetch(apiBase() + '/docs', { method: 'HEAD', mode: 'no-cors' });
       apiStatus.className = 'api-status ok'; apiStatus.textContent = '● online';
     } catch {
       apiStatus.className = 'api-status err'; apiStatus.textContent = '● offline';
@@ -378,6 +373,10 @@
   }
   apiInput.addEventListener('change', pingServer);
   pingServer();
+
+  // Wire Browse buttons to file inputs
+  document.getElementById('btn-before').addEventListener('click', () => fileBefore.click());
+  document.getElementById('btn-after').addEventListener('click',  () => fileAfter.click());
 
   function markReady(dropId, nameId, file) {
     document.getElementById(nameId).textContent = file.name;
@@ -389,29 +388,26 @@
     btn.disabled = !(fileBefore.files[0] && fileAfter.files[0]);
   }
 
-  function onFileChange(input, dropId, nameId) {
-    if (input.files[0]) markReady(dropId, nameId, input.files[0]);
-  }
-  fileBefore.addEventListener('change', () => onFileChange(fileBefore, 'drop-before', 'name-before'));
-  fileBefore.addEventListener('input',  () => onFileChange(fileBefore, 'drop-before', 'name-before'));
-  fileAfter.addEventListener('change',  () => onFileChange(fileAfter,  'drop-after',  'name-after'));
-  fileAfter.addEventListener('input',   () => onFileChange(fileAfter,  'drop-after',  'name-after'));
+  fileBefore.addEventListener('change', () => { if (fileBefore.files[0]) markReady('drop-before','name-before', fileBefore.files[0]); });
+  fileAfter.addEventListener('change',  () => { if (fileAfter.files[0])  markReady('drop-after', 'name-after',  fileAfter.files[0]); });
 
-  // Drag-and-drop
+  // Drag-and-drop onto the visual zones
   ['drop-before','drop-after'].forEach(id => {
-    const zone = document.getElementById(id);
-    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+    const zone   = document.getElementById(id);
+    const input  = id === 'drop-after' ? fileAfter : fileBefore;
+    const nameId = id === 'drop-after' ? 'name-after' : 'name-before';
+    zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('over'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('over'));
     zone.addEventListener('drop', e => {
       e.preventDefault(); zone.classList.remove('over');
       const file = e.dataTransfer.files[0];
       if (!file) return;
-      const isAfter = id === 'drop-after';
-      const input = isAfter ? fileAfter : fileBefore;
       const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
-      markReady(id, isAfter ? 'name-after' : 'name-before', file);
+      markReady(id, nameId, file);
     });
   });
 
   const RISK_CONFIG = {
     High:   { icon: '🔴', sub: 'High probability of agricultural encroachment detected.' },
+    Medium: { icon: '🟡', sub: 'Moderate change signal — manual review recommended.'    },
+    Low:    
