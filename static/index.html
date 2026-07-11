@@ -86,10 +86,7 @@
     }
     .drop-zone:hover, .drop-zone.over { border-color: var(--orange); background: rgba(255,107,0,.05); }
     .drop-zone.ready { border-color: var(--accent); background: rgba(35,134,54,.05); }
-    .drop-zone input[type="file"] {
-      position: absolute; inset: 0; opacity: 0; cursor: pointer;
-      width: 100%; height: 100%; z-index: 10;
-    }
+    .drop-zone input[type="file"] { display: none; }
     .drop-icon { font-size: 2rem; }
     .drop-label { font-weight: 600; font-size: .95rem; }
     .drop-sub { font-size: .8rem; color: var(--muted); }
@@ -98,6 +95,7 @@
       word-break: break-all;
     }
     .browse-btn {
+      display: inline-block;
       margin-top: .5rem;
       padding: .3rem .9rem;
       background: transparent;
@@ -106,7 +104,6 @@
       color: var(--muted);
       font-size: .8rem;
       cursor: pointer;
-      pointer-events: none; /* click handled by the file input above */
     }
 
     /* ── Button ── */
@@ -284,22 +281,22 @@
 
 <!-- Upload -->
 <div class="upload-grid">
-  <div class="drop-zone" id="drop-before">
+  <label class="drop-zone" id="drop-before" for="file-before">
     <input type="file" id="file-before" accept=".tif,.tiff" />
     <span class="drop-icon">🛰️</span>
     <span class="drop-label">Before Image</span>
     <span class="drop-sub">6-band Sentinel-2 TIF (2024)</span>
     <span class="file-name" id="name-before"></span>
-    <button class="browse-btn">Browse file…</button>
-  </div>
-  <div class="drop-zone" id="drop-after">
+    <span class="browse-btn">Browse file…</span>
+  </label>
+  <label class="drop-zone" id="drop-after" for="file-after">
     <input type="file" id="file-after" accept=".tif,.tiff" />
     <span class="drop-icon">📡</span>
     <span class="drop-label">After Image</span>
     <span class="drop-sub">6-band Sentinel-2 TIF (2025)</span>
     <span class="file-name" id="name-after"></span>
-    <button class="browse-btn">Browse file…</button>
-  </div>
+    <span class="browse-btn">Browse file…</span>
+  </label>
 </div>
 
 <button class="btn" id="btn-analyze" disabled>Analyze Change</button>
@@ -418,4 +415,5 @@
 
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-  
+    status.innerHTML = '<span class="spinner"></span> Running RF inference…';
+    document.getElementById('r
