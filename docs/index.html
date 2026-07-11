@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KEMET1 — Agricultural Encroachment Detector</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --accent:    #238636;
+      --accent-h:  #2ea043;
+      --high:      #da3633;
+      --medium:    #d29922;
+      --low:       #238636;
+      --orange:    #FF6B00;
+      --radius:    10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: .6rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      color: var(--text);
+    }
+    .logo-dot { color: var(--orange); }
+    header p {
+      color: var(--muted);
+      margin-top: .4rem;
+      font-size: .9rem;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+
+    /* ── Upload grid ── */
+    .upload-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      max-width: 860px;
+      margin: 0 auto 1.2rem;
+    }
+    @media (max-width: 600px) { .upload-grid { grid-template-columns: 1fr; } }
+
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 2rem 1rem;
+      text-align: center;
+      transition: border-color .2s, background .2s;
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+    }
+    .drop-zone.over   { border-color: var(--orange); background: rgba(255,107,0,.05); }
+    .drop-zone.ready  { border-color: var(--accent);  background: rgba(35,134,54,.05); }
+    .drop-icon  { font-size: 2rem; }
+    .drop-label { font-weight: 600; font-size: .95rem; }
+    .drop-sub   { font-size: .8rem; color: var(--muted); }
+    .file-name  { font-size: .8rem; color: var(--accent); margin-top: .2rem; word-break: break-all; }
+    .browse-btn {
+      display: inline-block;
+      margin-top: .5rem;
+      padding: .35rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: .85rem;
+      cursor: pointer;
+    }
+    .browse-btn:hover { border-color: var(--orange); }
+    .browse-btn input[type="file"] {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+    }
+
+    /* ── Button ── */
+    .btn {
+      display: block;
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: .75rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, opacity .2s;
+    }
+    .btn:hover:not(:disabled) { background: var(--accent-h); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Status ── */
+    #status {
+      text-align: center;
+      margin-top: 1rem;
+      color: var(--muted);
+      font-size: .88rem;
+      min-height: 1.4em;
+    }
+
+    /* ── Results ── */
+    #results { max-width: 860px; margin: 2rem auto 0; display: none; }
+
+    .risk-banner {
+      border-radius: var(--radius);
+      padding: 1rem 1.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .risk-banner.High   { background: rgba(218,54,51,.12); border: 1px solid var(--high); }
+    .risk-banner.Medium { background: rgba(210,153,34,.12); border: 1px solid var(--medium); }
+    .risk-banner.Low    { background: rgba(35,134,54,.12);  border: 1px solid var(--low); }
+
+    .risk-icon { font-size: 2rem; }
+    .risk-label { font-size: 1.4rem; font-weight: 700; }
+    .risk-sub   { font-size: .85rem; color: var(--muted); margin-top: .1rem; }
+    .High   .risk-label { color: var(--high); }
+    .Medium .risk-label { color: var(--medium); }
+    .Low    .risk-label { color: var(--low); }
+
+    /* ── Metrics ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: .75rem;
+      margin-bottom: 1rem;
+    }
+    .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: .9rem 1rem;
+      text-align: center;
+    }
+    .metric-value { font-size: 1.4rem; font-weight: 700; color: var(--text); }
+    .metric-label { font-size: .75rem; color: var(--muted); margin-top: .2rem; }
+
+    /* ── Image comparison ── */
+    .img-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 600px) { .img-grid { grid-template-columns: 1fr; } }
+
+    .img-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .img-card img {
+      width: 100%;
+      display: block;
+    }
+    .img-card-label {
+      padding: .5rem .75rem;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Coords ── */
+    .coords {
+      text-align: center;
+      margin-top: .75rem;
+      font-size: .8rem;
+      color: var(--muted);
+    }
+    .coords a { color: var(--muted); }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: .4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.5rem 0;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: .78rem;
+      margin-top: 3rem;
+    }
+
+    /* ── API URL bar ── */
+    .api-bar {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      max-width: 860px;
+      margin: 0 auto 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: .5rem .75rem;
+    }
+    .api-bar label { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+    .api-bar input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: .85rem;
+      font-family: monospace;
+      outline: none;
+    }
+    .api-status { font-size: .75rem; white-space: nowrap; }
+    .api-status.ok  { color: var(--low); }
+    .api-status.err { color: var(--high); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    KEMET<span class="logo-dot">1</span>
+  </div>
+  <p>Agricultural Encroachment Detector &mdash; Random Forest Model v5</p>
+</header>
+
+<!-- API URL bar -->
+<div class="api-bar">
+  <label>API Server</label>
+  <input id="api-url" type="text" value="http://localhost:8000" spellcheck="false" />
+  <span class="api-status" id="api-status"></span>
+</div>
+
+<!-- Upload -->
+<div class="upload-grid">
+  <div class="drop-zone" id="drop-before">
+    <span class="drop-icon">🛰️</span>
+    <span class="drop-label">Before Image</span>
+    <span class="drop-sub">6-band Sentinel-2 TIF (2024)</span>
+    <label class="browse-btn">
+      Browse file…
+      <input type="file" id="file-before" />
+    </label>
+    <span class="file-name" id="name-before"></span>
+  </div>
+  <div class="drop-zone" id="drop-after">
+    <span class="drop-icon">📡</span>
+    <span class="drop-label">After Image</span>
+    <span class="drop-sub">6-band Sentinel-2 TIF (2025)</span>
+    <label class="browse-btn">
+      Browse file…
+      <input type="file" id="file-after" />
+    </label>
+    <span class="file-name" id="name-after"></span>
+  </div>
+</div>
+
+<button class="btn" id="btn-analyze" disabled>Analyze Change</button>
+<div id="status"></div>
+
+<hr class="divider" style="max-width:860px;margin:1.5rem auto;" />
+
+<!-- Results -->
+<div id="results">
+  <div class="risk-banner" id="risk-banner">
+    <span class="risk-icon" id="risk-icon"></span>
+    <div>
+      <div class="risk-label" id="risk-label"></div>
+      <div class="risk-sub" id="risk-sub"></div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-value" id="m-fusion"></div>
+      <div class="metric-label">Fusion Score</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value" id="m-rf"></div>
+      <div class="metric-label">RF Probability</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value" id="m-clusters"></div>
+      <div class="metric-label">Clusters Detected</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value" id="m-area"></div>
+      <div class="metric-label">Area (feddan)</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value" id="m-m2"></div>
+      <div class="metric-label">Area (m²)</div>
+    </div>
+  </div>
+
+  <div class="img-grid">
+    <div class="img-card">
+      <img id="img-before" src="" alt="Before" />
+      <div class="img-card-label">BEFORE (2024)</div>
+    </div>
+    <div class="img-card">
+      <img id="img-after" src="" alt="After" />
+      <div class="img-card-label">AFTER (2025) — violations in orange</div>
+    </div>
+  </div>
+
+  <div class="coords">
+    Centre: <span id="coords-text"></span> &mdash;
+    <a id="coords-link" href="#" target="_blank">Open in Google Maps ↗</a>
+  </div>
+</div>
+
+<footer>KEMET1 &bull; Graduation Project &bull; Random Forest v5 &bull; Val AUC 0.861</footer>
+
+<script>
+  const fileBefore = document.getElementById('file-before');
+  const fileAfter  = document.getElementById('file-after');
+  const btn        = document.getElementById('btn-analyze');
+  const status     = document.getElementById('status');
+  const apiInput   = document.getElementById('api-url');
+  const apiStatus  = document.getElementById('api-status');
+
+  function apiBase() { return apiInput.value.replace(/\/$/, ''); }
+
+  async function pingServer() {
+    apiStatus.className = 'api-status'; apiStatus.textContent = 'checking…';
+    try {
+      await fetch(apiBase() + '/docs', { method: 'HEAD', mode: 'no-cors' });
+      apiStatus.className = 'api-status ok'; apiStatus.textContent = '● online';
+    } catch {
+      apiStatus.className = 'api-status err'; apiStatus.textContent = '● offline';
+    }
+  }
+  apiInput.addEventListener('change', pingServer);
+  pingServer();
+
+  function markReady(dropId, nameId, file) {
+    document.getElementById(nameId).textContent = file.name;
+    document.getElementById(dropId).classList.add('ready');
+    checkReady();
+  }
+
+  function checkReady() {
+    btn.disabled = !(fileBefore.files[0] && fileAfter.files[0]);
+  }
+
+  fileBefore.addEventListener('change', () => { if (fileBefore.files[0]) markReady('drop-before','name-before', fileBefore.files[0]); });
+  fileAfter.addEventListener('change',  () => { if (fileAfter.files[0])  markReady('drop-after', 'name-after',  fileAfter.files[0]); });
+
+  // Drag-and-drop onto the visual zones
+  ['drop-before','drop-after'].forEach(id => {
+    const zone   = document.getElementById(id);
+    const input  = id === 'drop-after' ? fileAfter : fileBefore;
+    const nameId = id === 'drop-after' ? 'name-after' : 'name-before';
+    zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('over');
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+      markReady(id, nameId, file);
+    });
+  });
+
+  const RISK_CONFIG = {
+    High:   { icon: '🔴', sub: 'High probability of agricultural encroachment detected.' },
+    Medium: { icon: '🟡', sub: 'Moderate change signal — manual review recommended.'    },
+    Low:    { icon: '🟢', sub: 'No significant encroachment detected in this tile.'     },
+  };
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    status.innerHTML = '<span class="spinner"><
