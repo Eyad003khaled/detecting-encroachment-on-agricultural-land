@@ -396,6 +396,12 @@
     fileAfter.addEventListener(evt,  () => handleInput(fileAfter,  'drop-after',  'name-after'));
   });
 
+  // Fallback: poll every 300ms in case change/input events don't fire
+  setInterval(() => {
+    handleInput(fileBefore, 'drop-before', 'name-before');
+    handleInput(fileAfter,  'drop-after',  'name-after');
+  }, 300);
+
   // Drag-and-drop onto the visual zones
   ['drop-before','drop-after'].forEach(id => {
     const zone   = document.getElementById(id);
@@ -413,6 +419,4 @@
   });
 
   const RISK_CONFIG = {
-    High:   { icon: '🔴', sub: 'High probability of agricultural encroachment detected.' },
-    Medium: { icon: '🟡', sub: 'Moderate change signal — manual review recommended.'    },
-    Low:    { icon: '🟢', sub: 'No significant encroachment detected in this 
+    High:   { icon: '🔴', sub: 'High probabi
