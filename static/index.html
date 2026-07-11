@@ -281,7 +281,7 @@
 
 <!-- Upload -->
 <div class="upload-grid">
-  <label class="drop-zone" id="drop-before" for="file-before">
+  <label class="drop-zone" id="drop-before">
     <input type="file" id="file-before" accept=".tif,.tiff" />
     <span class="drop-icon">🛰️</span>
     <span class="drop-label">Before Image</span>
@@ -289,7 +289,7 @@
     <span class="file-name" id="name-before"></span>
     <span class="browse-btn">Browse file…</span>
   </label>
-  <label class="drop-zone" id="drop-after" for="file-after">
+  <label class="drop-zone" id="drop-after">
     <input type="file" id="file-after" accept=".tif,.tiff" />
     <span class="drop-icon">📡</span>
     <span class="drop-label">After Image</span>
@@ -388,8 +388,13 @@
     btn.disabled = !(fileBefore.files[0] && fileAfter.files[0]);
   }
 
-  fileBefore.addEventListener('change', () => fileBefore.files[0] && markReady('drop-before','name-before', fileBefore.files[0]));
-  fileAfter.addEventListener('change',  () => fileAfter.files[0]  && markReady('drop-after', 'name-after',  fileAfter.files[0]));
+  function onFileChange(input, dropId, nameId) {
+    if (input.files[0]) markReady(dropId, nameId, input.files[0]);
+  }
+  fileBefore.addEventListener('change', () => onFileChange(fileBefore, 'drop-before', 'name-before'));
+  fileBefore.addEventListener('input',  () => onFileChange(fileBefore, 'drop-before', 'name-before'));
+  fileAfter.addEventListener('change',  () => onFileChange(fileAfter,  'drop-after',  'name-after'));
+  fileAfter.addEventListener('input',   () => onFileChange(fileAfter,  'drop-after',  'name-after'));
 
   // Drag-and-drop
   ['drop-before','drop-after'].forEach(id => {
@@ -410,10 +415,4 @@
   const RISK_CONFIG = {
     High:   { icon: '🔴', sub: 'High probability of agricultural encroachment detected.' },
     Medium: { icon: '🟡', sub: 'Moderate change signal — manual review recommended.'    },
-    Low:    { icon: '🟢', sub: 'No significant encroachment detected in this tile.'     },
-  };
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    status.innerHTML = '<span class="spinner"></span> Running RF inference…';
-    document.getElementById('r
+    Low:    { icon: '🟢', sub: 'No significa
