@@ -20,6 +20,7 @@ import matplotlib.patches as patches
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -96,6 +97,15 @@ def _to_b64(data: np.ndarray, title: str, boxes=None) -> str:
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 app = FastAPI(title="KEMET1 RF Inference")
+
+# Allow cross-origin requests so the HTML file works when opened directly
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 STATIC_DIR.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -179,6 +189,4 @@ async def predict(
         "after_img":     after_b64,
     })
 
-# ── Entry point ───────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+# ── Entry point ───────────�

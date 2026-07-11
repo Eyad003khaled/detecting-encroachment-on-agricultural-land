@@ -226,6 +226,32 @@
       font-size: .78rem;
       margin-top: 3rem;
     }
+
+    /* ── API URL bar ── */
+    .api-bar {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      max-width: 860px;
+      margin: 0 auto 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: .5rem .75rem;
+    }
+    .api-bar label { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+    .api-bar input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: .85rem;
+      font-family: monospace;
+      outline: none;
+    }
+    .api-status { font-size: .75rem; white-space: nowrap; }
+    .api-status.ok  { color: var(--low); }
+    .api-status.err { color: var(--high); }
   </style>
 </head>
 <body>
@@ -236,6 +262,13 @@
   </div>
   <p>Agricultural Encroachment Detector &mdash; Random Forest Model v5</p>
 </header>
+
+<!-- API URL bar -->
+<div class="api-bar">
+  <label>API Server</label>
+  <input id="api-url" type="text" value="http://localhost:8000" spellcheck="false" />
+  <span class="api-status" id="api-status"></span>
+</div>
 
 <!-- Upload -->
 <div class="upload-grid">
@@ -317,6 +350,22 @@
   const fileAfter  = document.getElementById('file-after');
   const btn        = document.getElementById('btn-analyze');
   const status     = document.getElementById('status');
+  const apiInput   = document.getElementById('api-url');
+  const apiStatus  = document.getElementById('api-status');
+
+  function apiBase() { return apiInput.value.replace(/\/$/, ''); }
+
+  async function pingServer() {
+    apiStatus.className = 'api-status'; apiStatus.textContent = 'checking…';
+    try {
+      const r = await fetch(apiBase() + '/docs', { method: 'HEAD', mode: 'no-cors' });
+      apiStatus.className = 'api-status ok'; apiStatus.textContent = '● online';
+    } catch {
+      apiStatus.className = 'api-status err'; apiStatus.textContent = '● offline';
+    }
+  }
+  apiInput.addEventListener('change', pingServer);
+  pingServer();
 
   function markReady(dropId, nameId, file) {
     document.getElementById(nameId).textContent = file.name;
@@ -363,45 +412,7 @@
     form.append('after',  fileAfter.files[0]);
 
     try {
-      const res = await fetch('/predict', { method: 'POST', body: form });
+      const res = await fetch(apiBase() + '/predict', { method: 'POST', body: form });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
-      const d = await res.json();
-
-      // Risk banner
-      const cfg = RISK_CONFIG[d.risk_level] || RISK_CONFIG.Low;
-      const banner = document.getElementById('risk-banner');
-      banner.className = `risk-banner ${d.risk_level}`;
-      document.getElementById('risk-icon').textContent  = cfg.icon;
-      document.getElementById('risk-label').textContent = d.risk_level + ' Risk';
-      document.getElementById('risk-sub').textContent   = cfg.sub;
-
-      // Metrics
-      document.getElementById('m-fusion').textContent   = d.fusion_score.toFixed(3);
-      document.getElementById('m-rf').textContent       = (d.rf_prob * 100).toFixed(1) + '%';
-      document.getElementById('m-clusters').textContent = d.clusters;
-      document.getElementById('m-area').textContent     = d.area_feddan.toLocaleString();
-      document.getElementById('m-m2').textContent       = d.area_m2.toLocaleString();
-
-      // Images
-      document.getElementById('img-before').src = 'data:image/png;base64,' + d.before_img;
-      document.getElementById('img-after').src  = 'data:image/png;base64,' + d.after_img;
-
-      // Coords
-      document.getElementById('coords-text').textContent = `${d.lat}, ${d.lon}`;
-      document.getElementById('coords-link').href =
-        `https://www.google.com/maps?q=${d.lat},${d.lon}`;
-
-      document.getElementById('results').style.display = 'block';
-      status.textContent = '';
-    } catch (err) {
-      status.textContent = '⚠️ ' + err.message;
-    } finally {
-      btn.disabled = false;
-    }
-  });
-</script>
-</body>
-</html>
+   
