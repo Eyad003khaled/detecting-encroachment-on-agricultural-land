@@ -290,14 +290,14 @@
     <span class="drop-icon">🛰️</span>
     <span class="drop-label">Before Image</span>
     <span class="drop-sub">6-band Sentinel-2 TIF (2024)</span>
-    <input type="file" id="file-before" class="file-input" accept=".tif,.tiff" />
+    <input type="file" id="file-before" class="file-input" />
     <span class="file-name" id="name-before"></span>
   </div>
   <div class="drop-zone" id="drop-after">
     <span class="drop-icon">📡</span>
     <span class="drop-label">After Image</span>
     <span class="drop-sub">6-band Sentinel-2 TIF (2025)</span>
-    <input type="file" id="file-after" class="file-input" accept=".tif,.tiff" />
+    <input type="file" id="file-after" class="file-input" />
     <span class="file-name" id="name-after"></span>
   </div>
 </div>
@@ -381,18 +381,20 @@
   apiInput.addEventListener('change', pingServer);
   pingServer();
 
-  function markReady(dropId, nameId, file) {
-    document.getElementById(nameId).textContent = file.name;
-    document.getElementById(dropId).classList.add('ready');
-    checkReady();
+  function handleInput(input, dropId, nameId) {
+    const file = input.files && input.files[0];
+    document.getElementById(nameId).textContent = file ? file.name : '';
+    document.getElementById(dropId).classList.toggle('ready', !!file);
+    btn.disabled = !(
+      fileBefore.files && fileBefore.files[0] &&
+      fileAfter.files  && fileAfter.files[0]
+    );
   }
 
-  function checkReady() {
-    btn.disabled = !(fileBefore.files[0] && fileAfter.files[0]);
-  }
-
-  fileBefore.addEventListener('change', () => { if (fileBefore.files[0]) markReady('drop-before','name-before', fileBefore.files[0]); });
-  fileAfter.addEventListener('change',  () => { if (fileAfter.files[0])  markReady('drop-after', 'name-after',  fileAfter.files[0]); });
+  ['change','input'].forEach(evt => {
+    fileBefore.addEventListener(evt, () => handleInput(fileBefore, 'drop-before', 'name-before'));
+    fileAfter.addEventListener(evt,  () => handleInput(fileAfter,  'drop-after',  'name-after'));
+  });
 
   // Drag-and-drop onto the visual zones
   ['drop-before','drop-after'].forEach(id => {
@@ -413,4 +415,4 @@
   const RISK_CONFIG = {
     High:   { icon: '🔴', sub: 'High probability of agricultural encroachment detected.' },
     Medium: { icon: '🟡', sub: 'Moderate change signal — manual review recommended.'    },
-    Low:    { icon: '🟢', sub: 'No significant encroachment detected in this tile.'   
+    Low:    { icon: '🟢', sub: 'No significant encroachment detected in this 
