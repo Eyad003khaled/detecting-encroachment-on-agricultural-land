@@ -88,11 +88,16 @@
     .drop-label { font-weight: 600; font-size: .95rem; }
     .drop-sub   { font-size: .8rem; color: var(--muted); }
     .file-name  { font-size: .8rem; color: var(--accent); margin-top: .2rem; word-break: break-all; }
-    .browse-btn {
-      display: inline-block;
-      position: relative;
-      overflow: hidden;
+    input[type="file"].file-input {
+      display: block;
       margin-top: .5rem;
+      font-size: .85rem;
+      color: var(--text);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+    input[type="file"].file-input::file-selector-button {
       padding: .35rem 1rem;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -100,15 +105,10 @@
       color: var(--text);
       font-size: .85rem;
       cursor: pointer;
+      margin-right: .5rem;
     }
-    .browse-btn:hover { border-color: var(--orange); }
-    .browse-btn input[type="file"] {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      cursor: pointer;
+    input[type="file"].file-input::file-selector-button:hover {
+      border-color: var(--orange);
     }
 
     /* ── Button ── */
@@ -290,20 +290,14 @@
     <span class="drop-icon">🛰️</span>
     <span class="drop-label">Before Image</span>
     <span class="drop-sub">6-band Sentinel-2 TIF (2024)</span>
-    <label class="browse-btn">
-      Browse file…
-      <input type="file" id="file-before" />
-    </label>
+    <input type="file" id="file-before" class="file-input" accept=".tif,.tiff" />
     <span class="file-name" id="name-before"></span>
   </div>
   <div class="drop-zone" id="drop-after">
     <span class="drop-icon">📡</span>
     <span class="drop-label">After Image</span>
     <span class="drop-sub">6-band Sentinel-2 TIF (2025)</span>
-    <label class="browse-btn">
-      Browse file…
-      <input type="file" id="file-after" />
-    </label>
+    <input type="file" id="file-after" class="file-input" accept=".tif,.tiff" />
     <span class="file-name" id="name-after"></span>
   </div>
 </div>
@@ -419,4 +413,4 @@
   const RISK_CONFIG = {
     High:   { icon: '🔴', sub: 'High probability of agricultural encroachment detected.' },
     Medium: { icon: '🟡', sub: 'Moderate change signal — manual review recommended.'    },
-    Low:    { icon: '🟢', sub: 'No significant encroachment detected in this tile.'  
+    Low:    { icon: '🟢', sub: 'No significant encroachment detected in this tile.'   
